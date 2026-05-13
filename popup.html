@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>CMCE BOOSTER</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 0;
+      padding: 15px;
+      width: 200px;
+    }
+    
+    .section {
+      margin-bottom: 15px;
+      padding: 10px;
+      background: white;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .section-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: #666;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    
+    #cpf-cns {
+      width: 100%;
+      padding: 6px;
+      margin-bottom: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 6px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    
+    .btn:last-child {
+      margin-bottom: 0;
+    }
+    
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    
+    #buscarSisreg {
+      background: #1976d2;
+      color: white;
+    }
+    
+    #buscarSisreg:hover:not(:disabled) {
+      background: #1565c0;
+    }
+    
+    #preenchercompleto {
+      background: #d32f2f;
+      color: white;
+    }
+    
+    #preenchercompleto:hover:not(:disabled) {
+      background: #c62828;
+    }
+    
+    .extra-btn {
+      background: #7b1fa2;
+      color: white;
+      font-size: 12px;
+    }
+    
+    .extra-btn:hover:not(:disabled) {
+      background: #6a1b9a;
+    }
+    
+    .switch-container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .switch-label {
+      font-size: 13px;
+      color: #333;
+    }
+    
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 20px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #2196F3;
+    }
+
+    input:focus + .slider {
+      box-shadow: 0 0 1px #2196F3;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+    
+    #ok-message {
+      display: none;
+      margin-top: 10px;
+      text-align: center;
+      color: #388e3c;
+      font-weight: bold;
+      font-size: 13px;
+      background: #e8f5e9;
+      border-radius: 4px;
+      padding: 6px;
+    }
+    
+    .version {
+      text-align: center;
+      font-size: 10px;
+      color: #999;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="section">
+    <div class="section-title">Busca SISREG</div>
+    <input type="text" id="cpf-cns" placeholder="CPF ou CNS">
+    <button class="btn" id="buscarSisreg">Buscar no SISREG</button>
+  </div>
+  
+  <div class="section">
+    <div class="section-title">Remoção de Carregamento</div>
+    <div class="switch-container">
+      <span class="switch-label">Remover automaticamente</span>
+      <label class="switch">
+        <input type="checkbox" id="toggleRemover">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+  
+  <div class="section">
+    <div class="section-title">Funcionalidades Extras</div>
+    <button class="btn extra-btn" id="adicionarMedico">Adicionar Médico</button>
+    <button class="btn extra-btn" id="adicionarRegra">Adicionar Regra</button>
+    <button class="btn extra-btn" id="mostrarAtalhos">Ver Atalhos</button>
+  </div>
+  
+  <div id="ok-message">OK!</div>
+  
+  <div class="version">v1.2</div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
