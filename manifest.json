@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CMCE BOOSTER",
-  "version": "1.2",
+  "version": "1.3",
   "description": "Extensão unificada para CMCE: busca CNS/CPF, remove carregamento e monitora elementos",
   "action": {
     "default_popup": "popup.html"
@@ -11,9 +11,18 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://regulador.saude.pe.gov.br/*"],
-      "js": ["medicos-database.js", "regras.js", "autocomplete.js", "content.js"],
-      "css": ["styles.css"],
+      "matches": [
+        "https://regulador.saude.pe.gov.br/*"
+      ],
+      "js": [
+        "medicos-database.js",
+        "regras.js",
+        "autocomplete.js",
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -35,5 +44,11 @@
     "32": "icon.png",
     "48": "icon.png",
     "128": "icon.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["interceptor.js"],
+      "matches": ["https://regulador.saude.pe.gov.br/*"]
+    }
+  ]
 }
