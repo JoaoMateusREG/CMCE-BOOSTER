@@ -75,3 +75,8 @@
 .monitor-botao-fechar:hover {
   background: rgba(255, 255, 255, 0.3);
 }
+
+/* Modificador para notificação de erro/alerta */
+.monitor-notificacao.erro {
+  background-color: #f44336;
+}

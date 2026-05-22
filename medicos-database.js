@@ -318,12 +318,6 @@ const medicosDatabase = [
     busca: "GABRI GABRIELA MARIA 5848"
   },
   {
-    nome: "BRUNO CESAR",
-    crm: "CRM 20330",
-    especialidade: "UROLOGISTA",
-    busca: "BRUN BRUNO CESAR 20330"
-  },
-  {
     nome: "PATRICIA MORAIS CRM",
     crm: "CRM 9793",
     especialidade: "OTORRINO",

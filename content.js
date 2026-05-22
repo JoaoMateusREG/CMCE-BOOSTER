@@ -21,6 +21,9 @@ let ultimoItemVerificado = null;
 let notificacaoPersistente = false;
 let dadosHistoricoBrutos = [];
 
+// Controle VILA URUÇUBA
+let isPacienteVilaUrucuba = false;
+
 // Injeta o interceptor de rede para capturar JSONs do sistema
 function injetarInterceptor() {
   try {
@@ -37,6 +40,17 @@ function injetarInterceptor() {
 window.addEventListener('CMCE_HISTORY_DATA', (event) => {
   dadosHistoricoBrutos = event.detail;
   console.log('CMCE BOOSTER - Dados brutos do histórico capturados:', dadosHistoricoBrutos.length, 'itens');
+});
+
+window.addEventListener('CMCE_CIDADAO_DATA', (event) => {
+  const dados = event.detail;
+  if (dados && dados.logradouro && dados.logradouro.toUpperCase().includes('VILA URUÇUBA')) {
+    isPacienteVilaUrucuba = true;
+    bloquearCamposVilaUrucuba(true);
+  } else {
+    isPacienteVilaUrucuba = false;
+    desbloquearCamposVilaUrucuba();
+  }
 });
 
 // Inicializa a injeção
@@ -355,7 +369,7 @@ observerCarregamento.observe(document.body, { childList: true, subtree: true });
 // ============================================
 // FUNCIONALIDADE 3: MONITOR DE ELEMENTOS
 // ============================================
-function exibirNotificacao(mensagem, persistente = false) {
+function exibirNotificacao(mensagem, persistente = false, ehErro = false) {
   if (fechadaManualmente && mensagemAtual === mensagem) {
     return;
   }
@@ -407,6 +421,10 @@ function exibirNotificacao(mensagem, persistente = false) {
   notificacao.appendChild(textoMensagem);
   notificacao.appendChild(botaoFechar);
 
+  if (ehErro) {
+    notificacao.classList.add('erro');
+  }
+
   document.body.appendChild(notificacao);
   notificacaoAtual = notificacao;
 
@@ -430,6 +448,46 @@ function removerNotificacao() {
   fechadaManualmente = false;
   mensagemAtual = null;
   notificacaoPersistente = false;
+}
+
+function bloquearCamposVilaUrucuba(notificar = false) {
+  const inputs = document.querySelectorAll('form.form-solicitacao input, form.form-solicitacao textarea, form.form-solicitacao select, form.form-solicitacao p-dropdown, form.form-solicitacao mvcommons-autocomplete, form.form-solicitacao p-calendar, form.form-solicitacao mvcommons-calendar, form.form-solicitacao p-checkbox, form.form-solicitacao p-inputmask');
+  inputs.forEach(el => {
+    el.style.pointerEvents = 'none';
+    el.style.opacity = '0.5';
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+      el.disabled = true;
+    }
+  });
+
+  const btnSalvar = document.querySelector('button[title="Salvar"]');
+  if (btnSalvar) {
+    btnSalvar.disabled = true;
+    btnSalvar.style.pointerEvents = 'none';
+    btnSalvar.style.opacity = '0.5';
+  }
+  
+  if (notificar) {
+    exibirNotificacao("ATENÇÃO!\n\nO endereço do paciente deve ser atualizado para prosseguir com a solicitação.", true, true);
+  }
+}
+
+function desbloquearCamposVilaUrucuba() {
+  const inputs = document.querySelectorAll('form.form-solicitacao input, form.form-solicitacao textarea, form.form-solicitacao select, form.form-solicitacao p-dropdown, form.form-solicitacao mvcommons-autocomplete, form.form-solicitacao p-calendar, form.form-solicitacao mvcommons-calendar, form.form-solicitacao p-checkbox, form.form-solicitacao p-inputmask');
+  inputs.forEach(el => {
+    el.style.pointerEvents = '';
+    el.style.opacity = '';
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+      el.disabled = false;
+    }
+  });
+
+  const btnSalvar = document.querySelector('button[title="Salvar"]');
+  if (btnSalvar) {
+    btnSalvar.disabled = false;
+    btnSalvar.style.pointerEvents = '';
+    btnSalvar.style.opacity = '';
+  }
 }
 
 function obterValor(elemento) {
@@ -605,8 +663,12 @@ function verificarTodos() {
     }
   });
 
-  if (!encontrou) {
+  if (!encontrou && !isPacienteVilaUrucuba) {
     removerNotificacao();
+  }
+  
+  if (isPacienteVilaUrucuba) {
+    bloquearCamposVilaUrucuba(false);
   }
 }
 
