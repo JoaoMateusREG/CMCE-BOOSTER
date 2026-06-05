@@ -366,37 +366,110 @@ function formatarSugestao(medico) {
 }
 
 /**
- * Adiciona novo médico à base (para expansão futura)
+ * Adiciona novo médico à base
  * @param {Object} novoMedico - Dados do novo médico
  */
 function adicionarMedico(novoMedico) {
-  // Gera campo de busca automaticamente
   novoMedico.busca = `${novoMedico.nome} ${novoMedico.crm} ${novoMedico.especialidade}`.toUpperCase();
   medicosDatabase.push(novoMedico);
   
-  // Salva no storage local para persistência
-  chrome.storage.local.get('medicosCustomizados', (data) => {
-    const medicosCustomizados = data.medicosCustomizados || [];
-    medicosCustomizados.push(novoMedico);
-    chrome.storage.local.set({ medicosCustomizados });
-  });
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    try {
+      chrome.storage.local.get('medicosCustomizados', (data) => {
+        if (chrome.runtime.lastError) return;
+        const medicosCustomizados = data.medicosCustomizados || [];
+        medicosCustomizados.push(novoMedico);
+        chrome.storage.local.set({ medicosCustomizados });
+      });
+    } catch (e) {
+      console.warn('CMCE Booster - Erro ao adicionar médico no storage:', e);
+    }
+  }
 }
 
 /**
  * Carrega médicos customizados do storage
  */
 function carregarMedicosCustomizados() {
-  chrome.storage.local.get('medicosCustomizados', (data) => {
-    const medicosCustomizados = data.medicosCustomizados || [];
-    medicosCustomizados.forEach(medico => {
-      if (!medicosDatabase.find(m => m.nome === medico.nome)) {
-        medicosDatabase.push(medico);
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    try {
+      chrome.storage.local.get(['medicosCustomizados', 'medicosDefaultsMigrated'], (data) => {
+        if (chrome.runtime.lastError) {
+          console.warn('CMCE Booster - Erro ao ler médicos do storage:', chrome.runtime.lastError.message);
+          return;
+        }
+        
+        let medicos = data.medicosCustomizados;
+        const migrated = data.medicosDefaultsMigrated;
+
+        if (!migrated) {
+          // Se não foi migrado, fazemos o merge dos padrões com os do storage (se houver algum)
+          const medicosExistentes = medicos || [];
+          const novosMedicos = [...medicosExistentes];
+
+          medicosDatabase.forEach(defaultM => {
+            const jaExiste = novosMedicos.some(m => m.nome === defaultM.nome && m.crm === defaultM.crm);
+            if (!jaExiste) {
+              if (!defaultM.busca) {
+                defaultM.busca = `${defaultM.nome} ${defaultM.crm} ${defaultM.especialidade}`.toUpperCase();
+              }
+              novosMedicos.push(defaultM);
+            }
+          });
+
+          chrome.storage.local.set({
+            medicosCustomizados: novosMedicos,
+            medicosDefaultsMigrated: true
+          }, () => {
+            if (chrome.runtime.lastError) {
+              console.warn('CMCE Booster - Erro ao salvar médicos iniciais:', chrome.runtime.lastError.message);
+              return;
+            }
+            medicosDatabase.length = 0;
+            novosMedicos.forEach(m => medicosDatabase.push(m));
+            console.log('Médicos padrões migrados e mesclados no storage:', medicosDatabase.length);
+          });
+        } else {
+          // Se já foi migrado, carregamos do storage
+          if (medicos) {
+            medicosDatabase.length = 0;
+            medicos.forEach(m => {
+              if (!m.busca) {
+                m.busca = `${m.nome} ${m.crm} ${m.especialidade}`.toUpperCase();
+              }
+              medicosDatabase.push(m);
+            });
+            console.log('Médicos carregados do storage:', medicosDatabase.length);
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('CMCE Booster - Erro na execução de carregarMedicosCustomizados:', e);
+    }
+  }
+}
+
+// Escuta mudanças no storage para manter a base atualizada em tempo real
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.medicosCustomizados) {
+        const novosMedicos = changes.medicosCustomizados.newValue || [];
+        medicosDatabase.length = 0;
+        novosMedicos.forEach(m => {
+          if (!m.busca) {
+            m.busca = `${m.nome} ${m.crm} ${m.especialidade}`.toUpperCase();
+          }
+          medicosDatabase.push(m);
+        });
       }
     });
-  });
+  } catch (e) {
+    console.warn('CMCE Booster - Erro ao registrar listener de mudanças nos médicos:', e);
+  }
 }
 
 // Carrega médicos customizados ao inicializar
-if (typeof chrome !== 'undefined' && chrome.storage) {
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
   carregarMedicosCustomizados();
 }

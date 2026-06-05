@@ -80,3 +80,18 @@
 .monitor-notificacao.erro {
   background-color: #f44336;
 }
+
+/* Modificador para notificação de aviso (amarelo) */
+.monitor-notificacao.aviso {
+  background-color: #ffc107;
+  color: #1e1e1e;
+}
+
+.monitor-notificacao.aviso .monitor-botao-fechar {
+  color: #1e1e1e;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.monitor-notificacao.aviso .monitor-botao-fechar:hover {
+  background: rgba(0, 0, 0, 0.16);
+}

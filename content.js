@@ -21,8 +21,9 @@ let ultimoItemVerificado = null;
 let notificacaoPersistente = false;
 let dadosHistoricoBrutos = [];
 
-// Controle VILA URUÇUBA
+// Controle de Bloqueios (Vila Uruçuba / Cidade)
 let isPacienteVilaUrucuba = false;
+let isPacienteCidadeInvalida = false;
 
 // Injeta o interceptor de rede para capturar JSONs do sistema
 function injetarInterceptor() {
@@ -44,13 +45,27 @@ window.addEventListener('CMCE_HISTORY_DATA', (event) => {
 
 window.addEventListener('CMCE_CIDADAO_DATA', (event) => {
   const dados = event.detail;
+  
   if (dados && dados.logradouro && dados.logradouro.toUpperCase().includes('VILA URUÇUBA')) {
     isPacienteVilaUrucuba = true;
-    bloquearCamposVilaUrucuba(true);
   } else {
     isPacienteVilaUrucuba = false;
-    desbloquearCamposVilaUrucuba();
   }
+
+  let cidade = '';
+  if (dados && dados.municipio && dados.municipio.descricaoMunicipio) {
+    cidade = dados.municipio.descricaoMunicipio.toUpperCase();
+  } else if (dados && dados.cidade) {
+    cidade = dados.cidade.toUpperCase();
+  }
+  
+  if (cidade && !cidade.includes('LIMOEIRO')) {
+    isPacienteCidadeInvalida = true;
+  } else {
+    isPacienteCidadeInvalida = false;
+  }
+
+  verificarBloqueios(true);
 });
 
 // Inicializa a injeção
@@ -421,8 +436,10 @@ function exibirNotificacao(mensagem, persistente = false, ehErro = false) {
   notificacao.appendChild(textoMensagem);
   notificacao.appendChild(botaoFechar);
 
-  if (ehErro) {
+  if (ehErro === true || ehErro === 'erro') {
     notificacao.classList.add('erro');
+  } else if (ehErro === 'aviso') {
+    notificacao.classList.add('aviso');
   }
 
   document.body.appendChild(notificacao);
@@ -450,7 +467,22 @@ function removerNotificacao() {
   notificacaoPersistente = false;
 }
 
-function bloquearCamposVilaUrucuba(notificar = false) {
+function verificarBloqueios(notificar = false) {
+  if (isPacienteVilaUrucuba || isPacienteCidadeInvalida) {
+    bloquearCamposGlobais();
+    if (notificar) {
+      if (isPacienteCidadeInvalida) {
+        exibirNotificacao("ATENÇÃO!\n\nO paciente não pertence à cidade de LIMOEIRO. Solicitação bloqueada.", true, true);
+      } else if (isPacienteVilaUrucuba) {
+        exibirNotificacao("ATENÇÃO!\n\nO endereço do paciente deve ser atualizado para prosseguir com a solicitação.", true, true);
+      }
+    }
+  } else {
+    desbloquearCamposGlobais();
+  }
+}
+
+function bloquearCamposGlobais() {
   const inputs = document.querySelectorAll('form.form-solicitacao input, form.form-solicitacao textarea, form.form-solicitacao select, form.form-solicitacao p-dropdown, form.form-solicitacao mvcommons-autocomplete, form.form-solicitacao p-calendar, form.form-solicitacao mvcommons-calendar, form.form-solicitacao p-checkbox, form.form-solicitacao p-inputmask');
   inputs.forEach(el => {
     el.style.pointerEvents = 'none';
@@ -466,13 +498,9 @@ function bloquearCamposVilaUrucuba(notificar = false) {
     btnSalvar.style.pointerEvents = 'none';
     btnSalvar.style.opacity = '0.5';
   }
-  
-  if (notificar) {
-    exibirNotificacao("ATENÇÃO!\n\nO endereço do paciente deve ser atualizado para prosseguir com a solicitação.", true, true);
-  }
 }
 
-function desbloquearCamposVilaUrucuba() {
+function desbloquearCamposGlobais() {
   const inputs = document.querySelectorAll('form.form-solicitacao input, form.form-solicitacao textarea, form.form-solicitacao select, form.form-solicitacao p-dropdown, form.form-solicitacao mvcommons-autocomplete, form.form-solicitacao p-calendar, form.form-solicitacao mvcommons-calendar, form.form-solicitacao p-checkbox, form.form-solicitacao p-inputmask');
   inputs.forEach(el => {
     el.style.pointerEvents = '';
@@ -490,12 +518,51 @@ function desbloquearCamposVilaUrucuba() {
   }
 }
 
+function obterCidadeDoPaciente() {
+  const inputCidade = document.querySelector('input[formcontrolname="descricaoMunicipio"]');
+  if (inputCidade && inputCidade.value) {
+    return inputCidade.value.trim().toUpperCase();
+  }
+  return null;
+}
+
 function obterValor(elemento) {
   if (elemento.tagName === "SELECT") {
     const opcao = elemento.options[elemento.selectedIndex];
     return opcao ? opcao.text : "";
   }
   return elemento.value || "";
+}
+
+function calcularIdade(dataNascimentoStr) {
+  if (!dataNascimentoStr) return null;
+  const cleanDate = dataNascimentoStr.replace(/[^\d/]/g, '').trim();
+  const partes = cleanDate.split('/');
+  if (partes.length !== 3) return null;
+  const dia = parseInt(partes[0], 10);
+  const mes = parseInt(partes[1], 10) - 1;
+  const ano = parseInt(partes[2], 10);
+  if (isNaN(dia) || isNaN(mes) || isNaN(ano)) return null;
+  
+  const hoje = new Date();
+  const nascimento = new Date(ano, mes, dia);
+  let idade = hoje.getFullYear() - nascimento.getFullYear();
+  const m = hoje.getMonth() - nascimento.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+    idade--;
+  }
+  return idade;
+}
+
+function obterIdadeDoPaciente() {
+  const inputNasc = document.querySelector('mvcommons-calendar[controllabel="Nascimento"] input') ||
+                    document.querySelector('app-aba-dados-cidadao mvcommons-calendar p-calendar span input') ||
+                    document.querySelector('app-aba-dados-cidadao mvcommons-calendar input') ||
+                    document.querySelector('mvcommons-calendar input');
+  if (inputNasc && inputNasc.value) {
+    return calcularIdade(inputNasc.value);
+  }
+  return null;
 }
 
 function verificarElemento(elemento) {
@@ -509,7 +576,59 @@ function verificarElemento(elemento) {
       : valor.includes(valorEsperado);
 
     if (corresponde) {
-      exibirNotificacao(regra.mensagem);
+      const temFaixaEtaria = (regra.idadeMin !== undefined && regra.idadeMax !== undefined);
+      const isColonoscopia = regra.valorEsperado.toUpperCase().includes("COLONOSCOPIA");
+
+      if (temFaixaEtaria || isColonoscopia) {
+        const minIdade = regra.idadeMin !== undefined ? regra.idadeMin : (valorEsperado.includes("ALFA") ? 14 : 18);
+        const maxIdade = regra.idadeMax !== undefined ? regra.idadeMax : (valorEsperado.includes("ALFA") ? 69 : 65);
+        
+        const idade = obterIdadeDoPaciente();
+        let msg = regra.mensagem;
+        let estErro = false;
+
+        if (idade !== null) {
+          const ultrapassouLimite = (idade > maxIdade || idade < minIdade);
+
+          if (ultrapassouLimite) {
+            // Se passar da idade, mostra mensagem simplificada e direta
+            msg = `IDADE DO PACIENTE: ${idade} anos\n\nO paciente ultrapassa a faixa etária permitida para este procedimento (${minIdade} a ${maxIdade} anos).`;
+          } else {
+            // Se adequado à faixa etária, mostra a idade e toda a mensagem correta
+            msg = `IDADE DO PACIENTE: ${idade} anos\n\n${regra.mensagem}`;
+          }
+
+          if (isColonoscopia) {
+            // Caso especial colonoscopia:
+            // - Ultrapassou ambas (idade > 69) -> vermelho
+            // - Ultrapassou apenas uma (idade > 65 e <= 69) -> amarelo
+            // - Igual ou 1 ano mais novo que o limite do procedimento selecionado -> amarelo
+            // - Resto -> verde
+            if (idade > 69) {
+              estErro = 'erro';
+            } else if (idade >= 64 && idade <= 69) {
+              estErro = 'aviso';
+            } else {
+              estErro = false;
+            }
+          } else {
+            // Lógica geral para outros procedimentos com faixa etária:
+            // - Se ultrapassou o limite -> vermelho
+            // - Se igual ou apenas 1 ano mais novo que o máximo -> amarelo
+            // - Resto -> verde
+            if (ultrapassouLimite) {
+              estErro = 'erro';
+            } else if (idade === maxIdade || idade === (maxIdade - 1)) {
+              estErro = 'aviso';
+            } else {
+              estErro = false;
+            }
+          }
+        }
+        exibirNotificacao(msg, false, estErro);
+      } else {
+        exibirNotificacao(regra.mensagem);
+      }
       return true;
     }
   }
@@ -663,13 +782,20 @@ function verificarTodos() {
     }
   });
 
-  if (!encontrou && !isPacienteVilaUrucuba) {
+  const cidadeDom = obterCidadeDoPaciente();
+  if (cidadeDom) {
+    if (!cidadeDom.includes('LIMOEIRO')) {
+      isPacienteCidadeInvalida = true;
+    } else {
+      isPacienteCidadeInvalida = false;
+    }
+  }
+
+  if (!encontrou && !isPacienteVilaUrucuba && !isPacienteCidadeInvalida) {
     removerNotificacao();
   }
   
-  if (isPacienteVilaUrucuba) {
-    bloquearCamposVilaUrucuba(false);
-  }
+  verificarBloqueios(false);
 }
 
 // ============================================

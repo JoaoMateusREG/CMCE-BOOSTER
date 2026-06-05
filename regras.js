@@ -9,7 +9,7 @@ const regras = [
     seletor: "select, input, textarea",
 
     // valorEsperado: O texto que você quer detectar
-    valorEsperado: "IFP - COLONOSCOPIA",
+    valorEsperado: "IFP - COLONOSCOPIA (COLOSCOPIA)",
 
     // mensagem: A mensagem que aparecerá na tela quando o texto for detectado
     // Use \n para criar parágrafos/quebras de linha
@@ -19,13 +19,17 @@ const regras = [
     // correspondenciaExata:
     // - false = detecta se o texto CONTÉM a frase (ex: "C.ONSULTA EM OFTALMOLOGIA GERAL URGENTE" também funciona)
     // - true = detecta apenas se o texto for EXATAMENTE igual
-    correspondenciaExata: false,
+    correspondenciaExata: true,
+    idadeMin: 18,
+    idadeMax: 65
   },
   {
     seletor: "select, input, textarea",
-    valorEsperado: "ALFA - COLONOSCOPIA",
+    valorEsperado: "ALFA - COLONOSCOPIA (COLOSCOPIA)",
     mensagem: "Faixa etária entre 14 e 69 anos.\n\nPrecisa-se de APAC.",
-    correspondenciaExata: false,
+    correspondenciaExata: true,
+    idadeMin: 14,
+    idadeMax: 69
   },
   {
     seletor: "select, input, textarea",
@@ -36,7 +40,7 @@ const regras = [
   },
   {
     seletor: "select, input, textarea",
-    valorEsperado: "C.ONSULTA PRÉ NATAL DE ALTO RISCO",
+    valorEsperado: "CONSULTA PRÉ NATAL DE ALTO RISCO",
     mensagem:
       "Médicos que atendem PNAR: \n\nDr Dirce Luiza Pereira dos Santos\nDr Thiago Cesar Parente Saraiva.",
     correspondenciaExata: false,
@@ -453,56 +457,91 @@ const regras = [
 ];
 
 // ============================================
-// GESTÃO DE REGRAS CUSTOMIZADAS
+// GESTÃO DE REGRAS E ARMAZENAMENTO DINÂMICO
 // ============================================
 
 /**
- * Adiciona uma nova regra à base e salva no storage
- * @param {Object} dados - { valorEsperado, mensagem }
+ * Carrega e sincroniza as regras do storage (CIDs e Procedimentos separados)
  */
-function adicionarRegra(dados) {
-  const novaRegra = {
-    seletor: "select, input, textarea",
-    valorEsperado: dados.valorEsperado,
-    mensagem: dados.mensagem,
-    correspondenciaExata: false
-  };
-  
-  regras.push(novaRegra);
-  
-  // Salva no storage local para persistência
-  if (typeof chrome !== 'undefined' && chrome.storage) {
-    chrome.storage.local.get('regrasCustomizadas', (data) => {
-      const regrasCustomizadas = data.regrasCustomizadas || [];
-      regrasCustomizadas.push(novaRegra);
-      chrome.storage.local.set({ regrasCustomizadas }, () => {
-        console.log('Nova regra salva no storage:', novaRegra.valorEsperado);
-        // Dispara uma verificação imediata na tela
-        if (typeof verificarTodos === 'function') {
-          verificarTodos();
+function carregarRegras() {
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    try {
+      chrome.storage.local.get(['cidsCustomizados', 'procedimentosCustomizados', 'regrasDefaultsMigrated'], (data) => {
+        if (chrome.runtime.lastError) {
+          console.warn('CMCE Booster - Erro ao ler regras do storage:', chrome.runtime.lastError.message);
+          return;
+        }
+        
+        const cids = data.cidsCustomizados;
+        const procedimentos = data.procedimentosCustomizados;
+        const migrated = data.regrasDefaultsMigrated;
+
+        if (!migrated) {
+          // Se não foi migrado, fazemos o merge dos padrões com os do storage (se houver algum)
+          const cidsExistentes = cids || [];
+          const procedimentosExistentes = procedimentos || [];
+          
+          const novosCids = [...cidsExistentes];
+          const novosProcedimentos = [...procedimentosExistentes];
+
+          regras.forEach(regra => {
+            const valor = regra.valorEsperado.toUpperCase();
+            const ehCID = valor.includes('.') || 
+                          valor === "RETINOPATIA DIABÉTICA" || 
+                          valor === "ESTRABISMO" || 
+                          valor.includes("CID ");
+            
+            if (ehCID) {
+              const jaExiste = novosCids.some(r => r.valorEsperado === regra.valorEsperado);
+              if (!jaExiste) novosCids.push(regra);
+            } else {
+              const jaExiste = novosProcedimentos.some(r => r.valorEsperado === regra.valorEsperado);
+              if (!jaExiste) novosProcedimentos.push(regra);
+            }
+          });
+
+          chrome.storage.local.set({
+            cidsCustomizados: novosCids,
+            procedimentosCustomizados: novosProcedimentos,
+            regrasDefaultsMigrated: true
+          }, () => {
+            if (chrome.runtime.lastError) {
+              console.warn('CMCE Booster - Erro ao salvar regras iniciais:', chrome.runtime.lastError.message);
+              return;
+            }
+            regras.length = 0;
+            novosCids.forEach(r => regras.push(r));
+            novosProcedimentos.forEach(r => regras.push(r));
+            console.log('Regras padrões migradas e mescladas no storage:', regras.length);
+          });
+        } else {
+          // Carrega do storage
+          regras.length = 0;
+          if (cids) cids.forEach(r => regras.push(r));
+          if (procedimentos) procedimentos.forEach(r => regras.push(r));
+          console.log('Regras sincronizadas do storage:', regras.length);
         }
       });
-    });
+    } catch (e) {
+      console.warn('CMCE Booster - Erro na execução de carregarRegras:', e);
+    }
   }
 }
 
-/**
- * Carrega regras customizadas do storage
- */
-function carregarRegrasCustomizadas() {
-  if (typeof chrome !== 'undefined' && chrome.storage) {
-    chrome.storage.local.get('regrasCustomizadas', (data) => {
-      const regrasCustomizadas = data.regrasCustomizadas || [];
-      regrasCustomizadas.forEach(regra => {
-        // Evita duplicatas se já estiver na base (por recarregamento do script)
-        if (!regras.find(r => r.valorEsperado === regra.valorEsperado && r.mensagem === regra.mensagem)) {
-          regras.push(regra);
+// Escuta mudanças no storage para manter regras sincronizadas em tempo real
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local') {
+        if (changes.cidsCustomizados || changes.procedimentosCustomizados) {
+          carregarRegras();
         }
-      });
-      console.log(`${regrasCustomizadas.length} regras customizadas carregadas.`);
+      }
     });
+  } catch (e) {
+    console.warn('CMCE Booster - Erro ao registrar listener de mudanças nas regras:', e);
   }
 }
 
 // Carrega as regras ao iniciar
-carregarRegrasCustomizadas();
+carregarRegras();
