@@ -1,97 +1,97 @@
 /* Estilo principal da notificação */
 .monitor-notificacao {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background-color: #4CAF50;
-  color: white;
-  padding: 14px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 999999;
-  font-family: Arial, sans-serif;
-  font-size: 16px;
-  font-weight: 500;
-  max-width: 350px;
-  opacity: 0;
-  transform: translateX(400px);
-  transition: all 0.3s ease-in-out;
-  pointer-events: auto;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: #4caf50;
+    color: white;
+    padding: 14px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 999999;
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    max-width: 350px;
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.3s ease-in-out;
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
 }
 
 /* Quando a notificação está visível */
 .monitor-notificacao.mostrar {
-  opacity: 1;
-  transform: translateX(0);
+    opacity: 1;
+    transform: translateX(0);
 }
 
 /* Ícone da notificação */
 .monitor-icone {
-  font-size: 20px;
-  flex-shrink: 0;
+    font-size: 20px;
+    flex-shrink: 0;
 }
 
 /* Texto da mensagem */
 .monitor-texto {
-  flex: 1;
-  line-height: 1.4;
+    flex: 1;
+    line-height: 1.4;
 }
 
 /* Parágrafos dentro da mensagem */
 .monitor-texto p {
-  margin: 0;
-  margin-bottom: 8px;
+    margin: 0;
+    margin-bottom: 8px;
 }
 
 /* Remove margem do último parágrafo */
 .monitor-texto p:last-child {
-  margin-bottom: 0;
+    margin-bottom: 0;
 }
 
 /* Botão de fechar */
 .monitor-botao-fechar {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  color: white;
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: background 0.2s;
-  padding: 0;
-  line-height: 1;
-  margin-top: 2px;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    padding: 0;
+    line-height: 1;
+    margin-top: 2px;
 }
 
 .monitor-botao-fechar:hover {
-  background: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.3);
 }
 
 /* Modificador para notificação de erro/alerta */
 .monitor-notificacao.erro {
-  background-color: #f44336;
+    background-color: #f44336;
 }
 
 /* Modificador para notificação de aviso (amarelo) */
 .monitor-notificacao.aviso {
-  background-color: #ffc107;
-  color: #1e1e1e;
+    background-color: #ffc107;
+    color: #1e1e1e;
 }
 
 .monitor-notificacao.aviso .monitor-botao-fechar {
-  color: #1e1e1e;
-  background: rgba(0, 0, 0, 0.08);
+    color: #1e1e1e;
+    background: rgba(0, 0, 0, 0.08);
 }
 
 .monitor-notificacao.aviso .monitor-botao-fechar:hover {
-  background: rgba(0, 0, 0, 0.16);
+    background: rgba(0, 0, 0, 0.16);
 }

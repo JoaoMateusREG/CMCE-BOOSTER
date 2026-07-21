@@ -177,7 +177,7 @@ const medicosDatabase = [
     nome: "CARLOS EDUARDO",
     crm: "CRM 38377",
     especialidade: "CLINICO",
-    busca: "CARL  CARLOS EDUARDO CRM 38377"
+    busca: "CARL  CARLOS EDUARDO 38377"
   },
   {
     nome: "IGOR DANIEL",
@@ -321,7 +321,7 @@ const medicosDatabase = [
     nome: "PATRICIA MORAIS CRM",
     crm: "CRM 9793",
     especialidade: "OTORRINO",
-    busca: "PATR PATRICIA MORAIS CRM 9793"
+    busca: "PATR PATRICIA MORAIS 9793"
   },
   
 ];

@@ -503,7 +503,7 @@
 <body>
   <header>
     <h1>CMCE BOOSTER <span>PRO</span></h1>
-    <div class="version-badge">v1.3</div>
+    <div class="version-badge">v1.4</div>
   </header>
 
   <nav class="tabs-bar">
@@ -542,7 +542,12 @@
   <div class="tab-container" id="tab-medicos">
     <div class="section-header">
       <h2>Médicos Cadastrados</h2>
-      <button class="btn btn-success btn-toggle-form" id="btn-toggle-medico">+ Novo Médico</button>
+      <div style="display: flex; gap: 4px;">
+        <input type="file" id="file-import-medico" accept=".json" style="display:none;">
+        <button class="btn btn-secondary btn-toggle-form" id="btn-import-medico" title="Importar">📥</button>
+        <button class="btn btn-secondary btn-toggle-form" id="btn-export-medico" title="Exportar">📤</button>
+        <button class="btn btn-success btn-toggle-form" id="btn-toggle-medico">+ Novo</button>
+      </div>
     </div>
 
     <!-- Form Cadastro Médico -->
@@ -583,7 +588,12 @@
   <div class="tab-container" id="tab-procedimentos">
     <div class="section-header">
       <h2>Procedimentos Monitorados</h2>
-      <button class="btn btn-success btn-toggle-form" id="btn-toggle-proc">+ Novo Procedimento</button>
+      <div style="display: flex; gap: 4px;">
+        <input type="file" id="file-import-proc" accept=".json" style="display:none;">
+        <button class="btn btn-secondary btn-toggle-form" id="btn-import-proc" title="Importar">📥</button>
+        <button class="btn btn-secondary btn-toggle-form" id="btn-export-proc" title="Exportar">📤</button>
+        <button class="btn btn-success btn-toggle-form" id="btn-toggle-proc">+ Novo</button>
+      </div>
     </div>
 
     <!-- Form Cadastro Procedimento -->
@@ -632,7 +642,12 @@
   <div class="tab-container" id="tab-cids">
     <div class="section-header">
       <h2>CIDs Monitorados</h2>
-      <button class="btn btn-success btn-toggle-form" id="btn-toggle-cid">+ Novo CID</button>
+      <div style="display: flex; gap: 4px;">
+        <input type="file" id="file-import-cid" accept=".json" style="display:none;">
+        <button class="btn btn-secondary btn-toggle-form" id="btn-import-cid" title="Importar">📥</button>
+        <button class="btn btn-secondary btn-toggle-form" id="btn-export-cid" title="Exportar">📤</button>
+        <button class="btn btn-success btn-toggle-form" id="btn-toggle-cid">+ Novo</button>
+      </div>
     </div>
 
     <!-- Form Cadastro CID -->

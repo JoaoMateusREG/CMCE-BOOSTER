@@ -132,7 +132,7 @@ function buscarNoSisregAsync(valor, tipo, tabCmceId) {
                     ).singleNodeValue;
                     if (resultado) {
                       texto = resultado.textContent;
-                    }
+                    }ADOLESCENCIA
                   } else if (tipoBusca === 'cpf') {
                     const bodyText = iframe.contentDocument.body.innerText || "";
                     const matchRegex = bodyText.match(/CPF[\s:\-]*(\d{3}\.?\d{3}\.?\d{3}-?\d{2})/i);

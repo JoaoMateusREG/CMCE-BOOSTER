@@ -623,6 +623,90 @@ ATALHOS DISPONÍVEIS:
     });
   }
 
+  // ============================================
+  // IMPORTAÇÃO / EXPORTAÇÃO
+  // ============================================
+  function exportarDados(dados, nomeArquivo) {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dados, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", nomeArquivo + ".json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  }
+
+  function setupImportExport(btnExportId, btnImportId, fileInputId, storageKey, duplicateCheckFn, renderFn) {
+    const btnExport = document.getElementById(btnExportId);
+    const btnImport = document.getElementById(btnImportId);
+    const fileInput = document.getElementById(fileInputId);
+
+    if (!btnExport || !btnImport || !fileInput) return;
+
+    btnExport.addEventListener('click', () => {
+      chrome.storage.local.get(storageKey, (data) => {
+        const items = data[storageKey] || [];
+        exportarDados(items, storageKey);
+        mostrarMensagemOk('Exportação concluída!');
+      });
+    });
+
+    btnImport.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const importedItems = JSON.parse(event.target.result);
+          if (!Array.isArray(importedItems)) {
+            alert("Formato de arquivo inválido. O arquivo deve conter uma lista (array) de itens.");
+            return;
+          }
+
+          const substituir = confirm("Deseja SUBSTITUIR a base atual?\n\n[OK] = Substituir toda a base existente\n[Cancelar] = Apenas adicionar/mesclar os itens novos (ignorando duplicatas)");
+
+          chrome.storage.local.get(storageKey, (data) => {
+            let currentItems = data[storageKey] || [];
+            
+            if (substituir) {
+              currentItems = importedItems;
+            } else {
+              importedItems.forEach(importItem => {
+                const isDuplicate = currentItems.some(currItem => duplicateCheckFn(currItem, importItem));
+                if (!isDuplicate) {
+                  currentItems.push(importItem);
+                }
+              });
+            }
+
+            chrome.storage.local.set({ [storageKey]: currentItems }, () => {
+              mostrarMensagemOk('Importação concluída com sucesso!');
+              renderFn();
+            });
+          });
+        } catch (err) {
+          alert("Erro ao ler o arquivo JSON: " + err.message);
+        }
+        fileInput.value = '';
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  setupImportExport('btn-export-medico', 'btn-import-medico', 'file-import-medico', 'medicosCustomizados', 
+    (a, b) => a.nome === b.nome && a.crm === b.crm, renderMedicos);
+    
+  setupImportExport('btn-export-proc', 'btn-import-proc', 'file-import-proc', 'procedimentosCustomizados', 
+    (a, b) => a.valorEsperado === b.valorEsperado && a.mensagem === b.mensagem, renderProcedimentos);
+    
+  setupImportExport('btn-export-cid', 'btn-import-cid', 'file-import-cid', 'cidsCustomizados', 
+    (a, b) => a.valorEsperado === b.valorEsperado && a.mensagem === b.mensagem, renderCIDs);
+
   // Render inicial após pequeno delay para garantir que os scripts de banco inicializaram
   setTimeout(() => {
     renderMedicos();

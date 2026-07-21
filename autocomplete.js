@@ -121,9 +121,9 @@ class MedicoAutocomplete {
     // Encontra a palavra atual onde está o cursor
     const textBeforeCursor = fullValue.substring(0, cursorPosition);
     
-    // Procura pela última palavra antes do cursor (apenas letras e acentos)
+    // Procura pela última palavra antes do cursor (letras, números e acentos)
     // Não inclui "DR" ou "DRA" na busca, apenas o nome
-    const wordMatch = textBeforeCursor.match(/([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]{2,})$/i);
+    const wordMatch = textBeforeCursor.match(/([a-zA-Z0-9ÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç]{2,})$/);
     
     if (!wordMatch) {
       this.hideSuggestions();
@@ -253,9 +253,61 @@ class MedicoAutocomplete {
     const nomeCompleto = medico.nome.replace(/^DR[A]?\s+/i, '');
     const textoParaInserir = `${nomeCompleto} ${medico.crm} - ${medico.especialidade}`;
     
-    // Substitui apenas a parte que foi digitada, mantendo o resto do texto
     const fullValue = this.currentInput.value;
-    const beforeText = fullValue.substring(0, this.replaceStart);
+    let finalReplaceStart = this.replaceStart;
+    
+    // NOVA LÓGICA: Verificar se as palavras anteriores também fazem parte do nome do médico ou crm
+    // Isso resolve o problema de digitar "João" (espaço) "Mateus" e substituir apenas "Mateus"
+    const textToCursor = fullValue.substring(0, this.replaceEnd);
+    const wordRegex = /([a-zA-Z0-9ÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç]+)/g;
+    
+    const typedWords = [];
+    let match;
+    while ((match = wordRegex.exec(textToCursor)) !== null) {
+      typedWords.push({
+        word: match[0],
+        start: match.index,
+        end: match.index + match[0].length
+      });
+    }
+    
+    if (typedWords.length > 0) {
+      const currentWordObj = typedWords[typedWords.length - 1];
+      const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      
+      const nomeCompletoNorm = normalize(nomeCompleto);
+      const nameWords = nomeCompletoNorm.split(/\s+/);
+      const currentTypedNorm = normalize(currentWordObj.word);
+      
+      // Procura a palavra atual no nome do médico
+      let nameWordIndex = -1;
+      for (let i = 0; i < nameWords.length; i++) {
+        if (nameWords[i].startsWith(currentTypedNorm)) {
+          nameWordIndex = i;
+          break;
+        }
+      }
+      
+      // Se encontrou a palavra, verifica as palavras anteriores
+      if (nameWordIndex > 0 && typedWords.length > 1) {
+        let typedIdx = typedWords.length - 2;
+        let nameIdx = nameWordIndex - 1;
+        
+        while (typedIdx >= 0 && nameIdx >= 0) {
+          const prevTypedNorm = normalize(typedWords[typedIdx].word);
+          if (nameWords[nameIdx] === prevTypedNorm || nameWords[nameIdx].startsWith(prevTypedNorm)) {
+            finalReplaceStart = typedWords[typedIdx].start;
+            typedIdx--;
+            nameIdx--;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+    
+    // Substitui a parte que foi digitada (agora incluindo palavras anteriores se houver match)
+    let beforeText = fullValue.substring(0, finalReplaceStart);
     const afterText = fullValue.substring(this.replaceEnd);
     
     const newValue = beforeText + textoParaInserir + afterText;

@@ -21,9 +21,13 @@ let ultimoItemVerificado = null;
 let notificacaoPersistente = false;
 let dadosHistoricoBrutos = [];
 
-// Controle de Bloqueios (Vila Uruçuba / Cidade)
+// Controle de Bloqueios (Vila Uruçuba / Cidade / Duplicidade)
 let isPacienteVilaUrucuba = false;
 let isPacienteCidadeInvalida = false;
+let isDuplicidade = false;
+
+// Controle de Pesquisa
+window.cidadaosIncompletos = new Set();
 
 // Injeta o interceptor de rede para capturar JSONs do sistema
 function injetarInterceptor() {
@@ -44,6 +48,7 @@ window.addEventListener('CMCE_HISTORY_DATA', (event) => {
 });
 
 window.addEventListener('CMCE_CIDADAO_DATA', (event) => {
+  isDuplicidade = false;
   const dados = event.detail;
   
   if (dados && dados.logradouro && dados.logradouro.toUpperCase().includes('VILA URUÇUBA')) {
@@ -66,6 +71,34 @@ window.addEventListener('CMCE_CIDADAO_DATA', (event) => {
   }
 
   verificarBloqueios(true);
+});
+
+window.addEventListener('CMCE_PESQUISA_CIDADAO', (event) => {
+  const data = event.detail;
+  if (data && data.content && Array.isArray(data.content)) {
+    window.cidadaosIncompletos.clear();
+    data.content.forEach(c => {
+      let isInc = false;
+      
+      // Regras de incompletude garantidas pelo payload
+      if (!c.cpf) isInc = true;
+      if (!c.cartaoSus) isInc = true;
+      if (!c.tipoLogradouro) isInc = true;
+      if (c.logradouro && c.logradouro.toUpperCase().includes('VILA URUÇUBA')) isInc = true;
+      if (c.municipio && c.municipio.descricaoMunicipio && !c.municipio.descricaoMunicipio.toUpperCase().includes('LIMOEIRO')) isInc = true;
+      
+      // Regras dinâmicas (se os campos existirem no JSON)
+      if ('raca' in c && !c.raca) isInc = true;
+      if ('racaCor' in c && !c.racaCor) isInc = true;
+      if ('naturalidade' in c && !c.naturalidade) isInc = true;
+      if ('telefoneCelular' in c && !c.telefoneCelular) isInc = true;
+      if ('celular' in c && !c.celular) isInc = true;
+      
+      if (isInc) {
+        window.cidadaosIncompletos.add(String(c.id));
+      }
+    });
+  }
 });
 
 // Inicializa a injeção
@@ -264,62 +297,62 @@ function buscarDadosCompletos(valor) {
 }
 
 function preencherDadosNoFormulario(dados) {
+  // Helper para preencher inputs de forma que o Angular reconheça
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  
+  function preencherInput(input, valor) {
+    if (!input || !valor) return;
+
+    const valorAtual = (input.value || '').trim().toUpperCase();
+    const valorNovo = String(valor).trim().toUpperCase();
+    const apenasNumAtual = valorAtual.replace(/\D/g, '');
+    const apenasNumNovo = valorNovo.replace(/\D/g, '');
+
+    if (valorAtual === valorNovo) return;
+    if (apenasNumNovo.length >= 8 && apenasNumAtual === apenasNumNovo) return;
+
+    input.focus();
+    nativeInputValueSetter.call(input, valor);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
+    input.blur();
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+  }
+
   // CPF
   if (dados.cpf) {
     const cpfInput = document.querySelector('p-inputmask[controllabel="CPF"] input');
-    if (cpfInput) {
-      cpfInput.value = dados.cpf;
-      cpfInput.dispatchEvent(new Event('input', { bubbles: true }));
-      cpfInput.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    preencherInput(cpfInput, dados.cpf);
   }
   
   // CNS
   if (dados.cns) {
     const cnsInput = document.querySelector('p-inputmask[controllabel="CNS"] input');
-    if (cnsInput) {
-      cnsInput.value = dados.cns;
-      cnsInput.dispatchEvent(new Event('input', { bubbles: true }));
-      cnsInput.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    preencherInput(cnsInput, dados.cns);
   }
   
   // Nome Completo
   if (dados.nome) {
     const nomeInput = document.querySelector('input[controllabel="Nome Completo"]');
-    if (nomeInput) {
-      nomeInput.value = dados.nome;
-      nomeInput.dispatchEvent(new Event('input', { bubbles: true }));
-      nomeInput.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    preencherInput(nomeInput, dados.nome);
   }
   
   // Nome da Mãe
   if (dados.nomeMae) {
     const nomeMaeInput = document.querySelector('input[controllabel="Nome da mãe"]');
-    if (nomeMaeInput) {
-      nomeMaeInput.value = dados.nomeMae;
-      nomeMaeInput.dispatchEvent(new Event('input', { bubbles: true }));
-      nomeMaeInput.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    preencherInput(nomeMaeInput, dados.nomeMae);
   }
   
-  // Data de Nascimento
-  if (dados.dataNascimento) {
-    const dataNascInput = document.querySelector('mvcommons-calendar[controllabel="Nascimento"] input');
-    if (dataNascInput) {
-      dataNascInput.value = dados.dataNascimento;
-      dataNascInput.dispatchEvent(new Event('input', { bubbles: true }));
-      dataNascInput.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  }
+
   
   // Sexo
   if (dados.sexo) {
     const sexoValue = dados.sexo.toUpperCase().includes('MASCULINO') ? '1' : '2';
     const sexoRadios = document.querySelectorAll('p-radiobutton[name="sexo"] input[type="radio"]');
     sexoRadios.forEach(radio => {
-      if (radio.value === sexoValue) {
+      if (radio.value === sexoValue && !radio.checked) {
         radio.click();
       }
     });
@@ -328,7 +361,7 @@ function preencherDadosNoFormulario(dados) {
   // Estrangeiro - sempre "Não"
   const estrangeiroRadios = document.querySelectorAll('p-radiobutton[name="flagEstrangeiro"] input[type="radio"]');
   estrangeiroRadios.forEach(radio => {
-    if (radio.value === '0') {
+    if (radio.value === '0' && !radio.checked) {
       radio.click();
     }
   });
@@ -337,6 +370,10 @@ function preencherDadosNoFormulario(dados) {
   setTimeout(() => {
     const racaCorDropdown = document.querySelector('mvcommons-dropdown[controllabel="Raça cor"] p-dropdown');
     if (racaCorDropdown) {
+      const currentLabel = racaCorDropdown.querySelector('.ui-dropdown-label');
+      if (currentLabel && currentLabel.textContent.trim() === 'BRANCA') {
+        return;
+      }
       const dropdownDiv = racaCorDropdown.querySelector('.ui-dropdown');
       if (dropdownDiv) {
         dropdownDiv.click();
@@ -357,12 +394,195 @@ function preencherDadosNoFormulario(dados) {
   setTimeout(() => {
     const cepInput = document.querySelector('p-inputmask[controllabel="CEP"] input');
     if (cepInput && (!cepInput.value || cepInput.value.trim() === '')) {
-      cepInput.value = '55700-000';
-      cepInput.dispatchEvent(new Event('input', { bubbles: true }));
-      cepInput.dispatchEvent(new Event('change', { bubbles: true }));
+      preencherInput(cepInput, '55700-000');
     }
+
+    // Limpar campos de Logradouro e Bairro logo após preencher o CEP
+    setTimeout(() => {
+      function limparCampo(seletor) {
+        const el = document.querySelector(seletor);
+        if (el) {
+          nativeInputValueSetter.call(el, '');
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      }
+      
+      limparCampo('input[controllabel="Logradouro"]');
+      limparCampo('input[controllabel="Bairro"]');
+    }, 300); // Delay curto para o Angular
   }, 500);
+
+  // ============================================
+  // Data de Nascimento - PREENCHIMENTO POR ÚLTIMO
+  // ============================================
+  // Esperamos todos os outros campos serem preenchidos e o Angular estabilizar,
+  // depois simulamos a digitação caractere a caractere para enganar o p-calendar.
+  if (dados.dataNascimento) {
+    setTimeout(() => {
+      const dataNascInput = document.querySelector('mvcommons-calendar[controllabel="Nascimento"] input');
+      if (dataNascInput) {
+        if (dataNascInput.value && dataNascInput.value.trim() === dados.dataNascimento.trim()) return;
+
+        dataNascInput.focus();
+        dataNascInput.value = '';
+        dataNascInput.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        const dataStr = dados.dataNascimento;
+        let i = 0;
+        
+        function digitarProximoCaractere() {
+          if (i < dataStr.length) {
+            const char = dataStr[i];
+            dataNascInput.value += char;
+            
+            dataNascInput.dispatchEvent(new KeyboardEvent('keydown', { 
+              bubbles: true, key: char, code: 'Key' + char.toUpperCase(), charCode: char.charCodeAt(0)
+            }));
+            dataNascInput.dispatchEvent(new KeyboardEvent('keypress', { 
+              bubbles: true, key: char, code: 'Key' + char.toUpperCase(), charCode: char.charCodeAt(0)
+            }));
+            dataNascInput.dispatchEvent(new Event('input', { bubbles: true }));
+            dataNascInput.dispatchEvent(new KeyboardEvent('keyup', { 
+              bubbles: true, key: char, code: 'Key' + char.toUpperCase(), charCode: char.charCodeAt(0)
+            }));
+            
+            i++;
+            setTimeout(digitarProximoCaractere, 15);
+          } else {
+            // Após digitar tudo, dispara change e blur para validar
+            dataNascInput.dispatchEvent(new Event('change', { bubbles: true }));
+            dataNascInput.blur();
+            dataNascInput.dispatchEvent(new Event('blur', { bubbles: true }));
+          }
+        }
+        
+        digitarProximoCaractere();
+      }
+    }, 1000);
+  }
+
+  // ============================================
+  // Naturalidade - LIMOEIRO - PE
+  // ============================================
+  // Espera tudo estabilizar, digita LIMOEIRO e seleciona "LIMOEIRO - PE"
+  // Depois re-preenche os campos que o CMCE pode limpar ao clicar no autocomplete
+   /* setTimeout(() => {
+    // Salva os valores atuais de todos os campos antes de mexer na naturalidade
+    const camposSalvos = {};
+    const cpfEl = document.querySelector('p-inputmask[controllabel="CPF"] input');
+    const cnsEl = document.querySelector('p-inputmask[controllabel="CNS"] input');
+    const nomeEl = document.querySelector('input[controllabel="Nome Completo"]');
+    const nomeMaeEl = document.querySelector('input[controllabel="Nome da mãe"]');
+    const cepEl = document.querySelector('p-inputmask[controllabel="CEP"] input');
+    
+    if (cpfEl) camposSalvos.cpf = cpfEl.value;
+    if (cnsEl) camposSalvos.cns = cnsEl.value;
+    if (nomeEl) camposSalvos.nome = nomeEl.value;
+    if (nomeMaeEl) camposSalvos.nomeMae = nomeMaeEl.value;
+    if (cepEl) camposSalvos.cep = cepEl.value;
+
+    const naturalidadeInput = document.querySelector('mvcommons-autocomplete[controllabel="Naturalidade"] input');
+    if (naturalidadeInput) {
+      naturalidadeInput.focus();
+      naturalidadeInput.value = '';
+      naturalidadeInput.dispatchEvent(new Event('input', { bubbles: true }));
+      
+      const texto = 'LIMOEIRO';
+      let i = 0;
+      
+      function digitarNaturalidade() {
+        if (i < texto.length) {
+          const char = texto[i];
+          naturalidadeInput.value += char;
+          
+          naturalidadeInput.dispatchEvent(new KeyboardEvent('keydown', { 
+            bubbles: true, key: char, code: 'Key' + char.toUpperCase(), charCode: char.charCodeAt(0)
+          }));
+          naturalidadeInput.dispatchEvent(new KeyboardEvent('keypress', { 
+            bubbles: true, key: char, code: 'Key' + char.toUpperCase(), charCode: char.charCodeAt(0)
+          }));
+          naturalidadeInput.dispatchEvent(new Event('input', { bubbles: true }));
+          naturalidadeInput.dispatchEvent(new KeyboardEvent('keyup', { 
+            bubbles: true, key: char, code: 'Key' + char.toUpperCase(), charCode: char.charCodeAt(0)
+          }));
+          
+          i++;
+          setTimeout(digitarNaturalidade, 15);
+        } else {
+          // Polling para esperar o dropdown aparecer
+          let tentativas = 0;
+          const maxTentativas = 40;
+          const intervalo = setInterval(() => {
+            tentativas++;
+            const opcoes = document.querySelectorAll('.ui-autocomplete-list-item');
+            if (opcoes.length > 0) {
+              for (const opcao of opcoes) {
+                if (opcao.textContent.trim() === 'LIMOEIRO - PE') {
+                  clearInterval(intervalo);
+                  setTimeout(() => {
+                    opcao.click();
+                    
+                    // Após o clique, espera o Angular processar e restaura campos que foram limpos
+                    setTimeout(() => {
+                      restaurarCamposSeNecessario(camposSalvos);
+                    }, 500);
+                  }, 100);
+                  return;
+                }
+              }
+            }
+            if (tentativas >= maxTentativas) {
+              clearInterval(intervalo);
+            }
+          }, 250);
+        }
+      }
+      
+      digitarNaturalidade();
+    }
+  }, 2500); */
 }
+
+// Função para restaurar campos que o CMCE pode ter limpado
+function restaurarCamposSeNecessario(salvos) {
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  
+  function restaurar(seletor, valorSalvo) {
+    if (!valorSalvo) return;
+    const el = document.querySelector(seletor);
+    if (el && (!el.value || el.value.trim() === '' || el.value.replace(/\D/g, '') === '')) {
+      nativeInputValueSetter.call(el, valorSalvo);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+  
+  restaurar('p-inputmask[controllabel="CPF"] input', salvos.cpf);
+  restaurar('p-inputmask[controllabel="CNS"] input', salvos.cns);
+  restaurar('input[controllabel="Nome Completo"]', salvos.nome);
+  restaurar('input[controllabel="Nome da mãe"]', salvos.nomeMae);
+  restaurar('p-inputmask[controllabel="CEP"] input', salvos.cep);
+  
+  // Sexo - re-clica se necessário
+  const sexoAtivo = document.querySelector('p-radiobutton[name="sexo"] .ui-state-active');
+  if (!sexoAtivo) {
+    const sexoRadios = document.querySelectorAll('p-radiobutton[name="sexo"] input[type="radio"]');
+    sexoRadios.forEach(radio => {
+      if (radio.value === '1') radio.click();
+    });
+  }
+  
+  // Estrangeiro - re-clica "Não" se necessário
+  const estrangeiroAtivo = document.querySelector('p-radiobutton[name="flagEstrangeiro"] .ui-state-active');
+  if (!estrangeiroAtivo) {
+    const estrangeiroRadios = document.querySelectorAll('p-radiobutton[name="flagEstrangeiro"] input[type="radio"]');
+    estrangeiroRadios.forEach(radio => {
+      if (radio.value === '0') radio.click();
+    });
+  }
+
+  }
 
 // ============================================
 // FUNCIONALIDADE 2: REMOÇÃO DE CARREGAMENTO
@@ -468,7 +688,7 @@ function removerNotificacao() {
 }
 
 function verificarBloqueios(notificar = false) {
-  if (isPacienteVilaUrucuba || isPacienteCidadeInvalida) {
+  if (isPacienteVilaUrucuba || isPacienteCidadeInvalida || isDuplicidade) {
     bloquearCamposGlobais();
     if (notificar) {
       if (isPacienteCidadeInvalida) {
@@ -567,6 +787,9 @@ function obterIdadeDoPaciente() {
 
 function verificarElemento(elemento) {
   const valor = obterValor(elemento).trim().toUpperCase();
+  const idade = obterIdadeDoPaciente();
+  const isMenor14 = (idade !== null && idade < 14);
+  const prefixoIdade = isMenor14 ? `ATENÇÃO: Paciente é menor de 14 anos.\n\n` : "";
 
   for (const regra of regras) {
     const valorEsperado = regra.valorEsperado.toUpperCase();
@@ -625,9 +848,13 @@ function verificarElemento(elemento) {
             }
           }
         }
-        exibirNotificacao(msg, false, estErro);
+        exibirNotificacao(prefixoIdade + msg, false, estErro ? estErro : (isMenor14 ? 'aviso' : false));
       } else {
-        exibirNotificacao(regra.mensagem);
+        let msgFinal = regra.mensagem;
+        if (idade !== null) {
+          msgFinal = `IDADE DO PACIENTE: ${idade} anos\n\n` + msgFinal;
+        }
+        exibirNotificacao(prefixoIdade + msgFinal, false, isMenor14 ? 'aviso' : false);
       }
       return true;
     }
@@ -704,7 +931,7 @@ function executarBuscaEValidacao(itemAlvo) {
 }
 
 function validarDuplicidade(itemAlvo, rows) {
-  const statusCriticos = ['AGUARDANDO REGULAÇÃO', 'AUTORIZADO', 'OPINIÃO FORMATIVA'];
+  const statusCriticos = ['AGUARDANDO REGULAÇÃO', 'AUTORIZADO', 'OPINIÃO FORMATIVA', 'MARCADO'];
   let duplicado = null;
 
   rows.forEach(row => {
@@ -741,17 +968,22 @@ function validarDuplicidade(itemAlvo, rows) {
   });
 
   if (duplicado) {
+    isDuplicidade = true;
     console.log('Duplicidade encontrada!', duplicado);
     exibirNotificacao(
-      `ALERTA DE DUPLICIDADE\n\nEste cidadão já possui uma solicitação de "${duplicado.item}" - ID: ${duplicado.id} com status "${duplicado.status}" em ${duplicado.data}.`,
-      true
+      `ALERTA DE DUPLICIDADE\n\nEste cidadão já possui uma solicitação para esse item com status "${duplicado.status}" em ${duplicado.data}\n\nID: ${duplicado.id}.`,
+      true,
+      'aviso'
     );
+    verificarBloqueios(false);
   } else {
+    isDuplicidade = false;
     console.log('Nenhuma duplicidade crítica encontrada no histórico.');
     // Se era uma notificação de duplicidade, removemos
     if (notificacaoPersistente) {
       removerNotificacao();
     }
+    verificarBloqueios(false);
   }
 }
 
@@ -791,8 +1023,16 @@ function verificarTodos() {
     }
   }
 
+  const idade = obterIdadeDoPaciente();
+  const isMenor14 = (idade !== null && idade < 14);
+  const isInModalCadastro = document.querySelector('app-pesquisa-cadastro-cidadao-dialog') !== null;
+
   if (!encontrou && !isPacienteVilaUrucuba && !isPacienteCidadeInvalida) {
-    removerNotificacao();
+    if (isMenor14 && !isInModalCadastro) {
+      exibirNotificacao(`IDADE DO PACIENTE: ${idade} anos\n\nATENÇÃO: Paciente é menor de 14 anos.`, false, 'aviso');
+    } else {
+      removerNotificacao();
+    }
   }
   
   verificarBloqueios(false);
@@ -845,6 +1085,246 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // ============================================
+// CUSTOMIZAÇÃO DO SISTEMA
+// ============================================
+function atualizarHeaderSistema() {
+  // Injeta a fonte Honk se ainda não estiver na página
+  if (!document.getElementById('fonte-honk-booster')) {
+    const link1 = document.createElement('link');
+    link1.rel = 'preconnect';
+    link1.href = 'https://fonts.googleapis.com';
+    
+    const link2 = document.createElement('link');
+    link2.rel = 'preconnect';
+    link2.href = 'https://fonts.gstatic.com';
+    link2.crossOrigin = 'anonymous';
+    
+    const link3 = document.createElement('link');
+    link3.id = 'fonte-honk-booster';
+    link3.rel = 'stylesheet';
+    link3.href = 'https://fonts.googleapis.com/css2?family=Honk:MORF@15&display=swap';
+    
+    document.head.appendChild(link1);
+    document.head.appendChild(link2);
+    document.head.appendChild(link3);
+  }
+
+  const labels = document.querySelectorAll('label.system-name');
+  labels.forEach(label => {
+    if (!label.dataset.boosterModificado) {
+      // Verifica se é exatamente o texto original para não sobrescrever caso mude ou já tenha modificado
+      if (label.textContent.trim() === 'Central de Marcação de Consultas e Exames' || !label.innerHTML.includes('CMCE BOOSTER')) {
+        label.dataset.boosterModificado = 'true';
+        label.innerHTML = 'Central de Marcação de Consultas e Exames + CMCE BOOSTER - <span style="font-family: \'Honk\', system-ui; font-optical-sizing: auto; font-weight: 400; font-style: normal; font-variation-settings: \'MORF\' 15, \'SHLN\' 50; font-size: 1.5em;"> Made by: João Mateus</span>';
+      }
+    }
+  });
+}
+
+// ============================================
+// SUBSTITUIÇÃO DE FOTO DO CIDADÃO
+// ============================================
+const imagensAssets = ['dog.jpg', 'gato.jpg'];
+for (let i = 2; i <= 30; i++) {
+  imagensAssets.push(`gato${i}.jpg`);
+}
+
+let blockImageReplacement = false;
+
+function substituirFotoCidadao() {
+  if (blockImageReplacement) return;
+  
+  // Pega apenas as fotos que ainda não tentamos alterar
+  const fotos = document.querySelectorAll('img.foto-cidadao:not([data-booster-foto-alterada])');
+  fotos.forEach(img => {
+    if (img.src && img.src.includes('cidadaoFotoPlaceHolder.png')) {
+      // Marca a imagem para não tentar substituir novamente, evitando loops infinitos
+      img.setAttribute('data-booster-foto-alterada', 'true');
+      const idx = Math.floor(Math.random() * imagensAssets.length);
+      try {
+        if (!chrome || !chrome.runtime || !chrome.runtime.getURL) {
+          throw new Error("API do Chrome indisponível");
+        }
+        img.src = chrome.runtime.getURL(`assets/${imagensAssets[idx]}`);
+      } catch (error) {
+        blockImageReplacement = true;
+        console.warn('CMCE BOOSTER: Erro fatal ao substituir foto. Funcionalidade desativada temporariamente.', error);
+      }
+    }
+  });
+}
+
+// Observer para tornar a substituição instantânea sem lag
+const observerDOMInstantaneo = new MutationObserver((mutations) => {
+  let mudouEstrutura = false;
+  let mudouImgSrc = false;
+  for (const mut of mutations) {
+    if (mut.type === 'childList' && mut.addedNodes.length > 0) {
+      mudouEstrutura = true;
+      mudouImgSrc = true;
+      break;
+    } else if (mut.type === 'attributes' && mut.target.tagName === 'IMG') {
+      mudouImgSrc = true;
+    }
+  }
+  
+  if (mudouImgSrc) {
+    substituirFotoCidadao();
+  }
+  if (mudouEstrutura) {
+    atualizarHeaderSistema();
+    destacarCidadaosIncompletos();
+    adicionarBotaoContinuar();
+    
+    // Autoclick instantâneo na tela inicial se vier do botão "Continuar Cadastrando"
+    if (sessionStorage.getItem('boosterAutoNovoCadastro') === 'true') {
+      const btnNovo = Array.from(document.querySelectorAll('button')).find(b => b.title === 'Solicitação de procedimento');
+      if (btnNovo && !btnNovo.disabled) {
+        sessionStorage.removeItem('boosterAutoNovoCadastro');
+        // Usamos um delay quase imperceptível de 100ms apenas para garantir que o Angular 
+        // já anexou os eventos de (click) neste botão recém nascido no DOM
+        setTimeout(() => btnNovo.click(), 100); 
+      }
+    }
+  }
+});
+
+// ============================================
+// DESTAQUE DE CIDADÃOS INCOMPLETOS
+// ============================================
+function destacarCidadaosIncompletos() {
+  if (!window.cidadaosIncompletos || window.cidadaosIncompletos.size === 0) return;
+  
+  const rows = document.querySelectorAll('app-pesquisa-cidadao p-table .ui-table-tbody tr:not(.empty-row)');
+  rows.forEach(row => {
+    const tdId = row.querySelector('td:nth-child(1)');
+    const tdNome = row.querySelector('td:nth-child(3)');
+    if (tdId && tdNome) {
+      // Extrai apenas os números para não bugar quando a tag for inserida junto do código
+      const idStr = tdId.textContent.replace(/\D/g, '').trim();
+      
+      if (window.cidadaosIncompletos.has(idStr)) {
+        if (!tdId.querySelector('.badge-incompleto')) {
+          // Limpa resquícios no nome (se ainda tiver)
+          const badgeAntigo = tdNome.querySelector('.badge-incompleto');
+          if (badgeAntigo) badgeAntigo.remove();
+
+          const badge = document.createElement('span');
+          badge.className = 'badge-incompleto';
+          badge.textContent = 'INCOMPLETO';
+          badge.style.color = 'white';
+          badge.style.backgroundColor = '#dc3545';
+          badge.style.padding = '2px 6px';
+          badge.style.borderRadius = '4px';
+          badge.style.marginLeft = '8px'; // Margem a esquerda pois fica depois do código
+          badge.style.fontSize = '0.85em';
+          badge.style.fontWeight = 'bold';
+          
+          // Muda a cor do texto para destacar
+          tdNome.style.color = '#dc3545';
+          tdNome.style.fontWeight = 'bold';
+          tdId.style.color = '#dc3545';
+          tdId.style.fontWeight = 'bold';
+          
+          tdId.appendChild(badge); // Adiciona após o código
+        }
+        
+        // Impede o duplo clique se estiver incompleto
+        if (!row.dataset.bloqueioDblClick) {
+          row.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            alert('CMCE BOOSTER: Cadastro INCOMPLETO!\nPor favor, selecione com um clique apenas e utilize o botão "Editar" (ícone de arquivo) logo abaixo para corrigir as informações pendentes antes de prosseguir.');
+          }, true);
+          row.dataset.bloqueioDblClick = 'true';
+        }
+      } else {
+        const badgeId = tdId.querySelector('.badge-incompleto');
+        if (badgeId) badgeId.remove();
+        const badgeNome = tdNome.querySelector('.badge-incompleto');
+        if (badgeNome) badgeNome.remove();
+      }
+    }
+  });
+}
+
+// ============================================
+// CONTINUAR CADASTRO (EVITAR SAIR DA PÁGINA)
+// ============================================
+function adicionarBotaoContinuar() {
+  const dialog = document.querySelector('app-dialog-impressao-relatorio');
+  if (dialog && !document.getElementById('btn-continuar-booster')) {
+    const botaoNaoOriginal = Array.from(dialog.querySelectorAll('button')).find(btn => btn.textContent.includes('Não'));
+    
+    const btn = document.createElement('button');
+    btn.id = 'btn-continuar-booster';
+    btn.className = 'ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only';
+    btn.style.backgroundColor = '#28a745';
+    btn.style.borderColor = '#28a745';
+    btn.style.color = '#fff';
+    btn.style.setProperty('margin-left', '15px', 'important');
+    btn.style.setProperty('padding', '0', 'important');
+    btn.style.setProperty('display', 'inline-flex', 'important');
+    btn.style.setProperty('align-items', 'center', 'important');
+    btn.style.setProperty('justify-content', 'center', 'important');
+    
+    const span = document.createElement('span');
+    span.className = 'ui-button-text ui-clickable';
+    span.textContent = 'Continuar Cadastrando';
+    span.style.fontWeight = 'bold';
+    span.style.padding = '0.5em 1em';
+    span.style.textAlign = 'center';
+    
+    btn.appendChild(span);
+    
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      sessionStorage.setItem('boosterAutoNovoCadastro', 'true');
+      if (botaoNaoOriginal) {
+        botaoNaoOriginal.click();
+      } else {
+        const dialogElement = dialog.closest('.ui-dialog');
+        if (dialogElement) {
+          const closeBtn = dialogElement.querySelector('.ui-dialog-titlebar-close');
+          if (closeBtn) closeBtn.click();
+        }
+      }
+    });
+
+    // Procura o elemento que contém o código/texto de solicitação
+    let elementoAlvo = null;
+    const labels = dialog.querySelectorAll('label, span, div, p, h1, h2, h3, h4, h5, b, strong');
+    for (const el of labels) {
+      if (el.children.length === 0 && (el.textContent.toLowerCase().includes('solicita') || el.textContent.toLowerCase().includes('código') || el.textContent.match(/\d{5,}/))) {
+        elementoAlvo = el;
+      }
+    }
+
+    if (elementoAlvo) {
+      // Coloca ao lado do texto da solicitação
+      const parent = elementoAlvo.parentElement;
+      parent.style.display = 'flex';
+      parent.style.alignItems = 'center';
+      parent.style.justifyContent = 'center';
+      parent.style.flexWrap = 'wrap';
+      parent.appendChild(btn);
+    } else {
+      // Fallback: anexa no topo do corpo do modal
+      const content = dialog.closest('.ui-dialog').querySelector('.ui-dialog-content');
+      if (content) {
+        const wrap = document.createElement('div');
+        wrap.style.display = 'flex';
+        wrap.style.justifyContent = 'center';
+        wrap.style.marginBottom = '15px';
+        wrap.appendChild(btn);
+        content.insertBefore(wrap, content.firstChild);
+      }
+    }
+  }
+}
+
+// ============================================
 // INICIALIZAÇÃO
 // ============================================
 function iniciar() {
@@ -869,6 +1349,16 @@ function iniciar() {
   
   // Inicia monitoramento de elementos constante
   setInterval(verificarTodos, 2000);
+  
+  // Substituições instantâneas usando MutationObserver (Foto e Header)
+  observerDOMInstantaneo.observe(document.body, { 
+    childList: true, 
+    subtree: true, 
+    attributes: true, 
+    attributeFilter: ['src'] 
+  });
+  atualizarHeaderSistema();
+  substituirFotoCidadao();
   
   document.addEventListener("input", aoPararDeDigitar, true);
   
