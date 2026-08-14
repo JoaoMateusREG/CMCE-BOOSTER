@@ -713,4 +713,119 @@ ATALHOS DISPONÍVEIS:
     renderProcedimentos();
     renderCIDs();
   }, 100);
+
+  // ============================================
+  // EXTRATOR IA
+  // ============================================
+  const extratorPdfInput = document.getElementById('extrator-pdf-input');
+  const btnSelecionarPdf = document.getElementById('btn-selecionar-pdf');
+  const extratorLoading = document.getElementById('extrator-loading');
+  const extratorErro = document.getElementById('extrator-erro');
+  const extratorResultados = document.getElementById('extrator-resultados');
+  const botoesExtrator = document.getElementById('botoes-extrator');
+
+  // Recupera dados extraídos caso o usuário tenha fechado e aberto o popup
+  chrome.storage.local.get('extratorDados', (data) => {
+    if (data.extratorDados) {
+      renderizarBotoesIA(data.extratorDados);
+    }
+  });
+
+  if (btnSelecionarPdf && extratorPdfInput) {
+    btnSelecionarPdf.addEventListener('click', () => extratorPdfInput.click());
+
+    extratorPdfInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      extratorLoading.style.display = 'block';
+      extratorErro.style.display = 'none';
+      extratorResultados.style.display = 'none';
+      botoesExtrator.innerHTML = '';
+
+      const formData = new FormData();
+      formData.append('pdf', file);
+
+      try {
+        const response = await fetch('http://127.0.0.1:5000/extrair', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) throw new Error('Falha na API: ' + response.statusText);
+        const dados = await response.json();
+
+        // Salva os dados localmente para quando o usuário fechar/abrir o popup
+        chrome.storage.local.set({ extratorDados: dados }, () => {
+          renderizarBotoesIA(dados);
+        });
+      } catch (err) {
+        extratorErro.textContent = 'Erro ao processar: Servidor Python está rodando na porta 5000?';
+        extratorErro.style.display = 'block';
+      } finally {
+        extratorLoading.style.display = 'none';
+        extratorPdfInput.value = '';
+      }
+    });
+  }
+
+  function renderizarBotoesIA(dados) {
+    extratorResultados.style.display = 'flex';
+    
+    function criarBotao(label, actionName, valorStr) {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.style.cssText = `
+        padding: 6px 10px;
+        background: #f8f9fa;
+        color: #333;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        text-align: left;
+        transition: background 0.2s;
+        margin-bottom: 4px;
+        width: 100%;
+      `;
+      btn.onmouseover = () => btn.style.background = '#e9ecef';
+      btn.onmouseout = () => btn.style.background = '#f8f9fa';
+      
+      btn.onclick = () => {
+        chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+          if (tabs[0]) {
+            chrome.tabs.sendMessage(tabs[0].id, { action: actionName, valor: valorStr });
+            mostrarMensagemOk('Preenchendo...');
+          }
+        });
+      };
+      return btn;
+    }
+
+    if (dados.cpf_cns) {
+      const isCpf = dados.cpf_cns.replace(/\D/g, '').length <= 11;
+      const rotulo = isCpf ? 'Inserir CPF: ' : 'Inserir CNS: ';
+      botoesExtrator.appendChild(criarBotao(rotulo + dados.cpf_cns, 'inserir_cpf', dados.cpf_cns));
+    }
+    if (dados.nome_cidadao) {
+      botoesExtrator.appendChild(criarBotao('Inserir Nome: ' + dados.nome_cidadao, 'inserir_nome', dados.nome_cidadao));
+    }
+    if (dados.data_nascimento) {
+      botoesExtrator.appendChild(criarBotao('Inserir Nascimento: ' + dados.data_nascimento, 'inserir_data', dados.data_nascimento));
+    }
+    if (dados.cid10) {
+      const codigoCid = dados.cid10.split(' - ')[0].trim();
+      botoesExtrator.appendChild(criarBotao('Inserir CID: ' + codigoCid, 'inserir_cid', codigoCid));
+    }
+    if (dados.profissional) {
+      const profTexto = dados.profissional + (dados.crm ? ' - ' + dados.crm : '');
+      botoesExtrator.appendChild(criarBotao('Inserir Profissional: ' + profTexto, 'inserir_profissional', {
+          nome: dados.profissional,
+          crm: dados.crm
+      }));
+    }
+    if (dados.motivo) {
+      botoesExtrator.appendChild(criarBotao('Inserir Motivo (Preenche ambos)', 'inserir_motivo', dados.motivo));
+    }
+  }
 });

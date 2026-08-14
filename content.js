@@ -235,6 +235,136 @@ function injetarBotoes() {
   console.log('Botões injetados com sucesso!');
 }
 
+function preencherCampoExtracao(seletor, valor) {
+    const input = document.querySelector(seletor);
+    if (!input) return false;
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    input.focus();
+    nativeInputValueSetter.call(input, valor);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
+    input.blur();
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+    return true;
+}
+
+function preencherMotivoExtrato(valor) {
+    const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    
+    const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
+    if (hipotese) {
+        hipotese.focus();
+        const espaco = hipotese.value ? '\n\n' : '';
+        nativeTextAreaValueSetter.call(hipotese, hipotese.value + espaco + valor);
+        hipotese.dispatchEvent(new Event('input', { bubbles: true }));
+        hipotese.dispatchEvent(new Event('change', { bubbles: true }));
+        hipotese.blur();
+    }
+    
+    const info = document.querySelector('textarea[controllabel="Informação Complementar"]');
+    if (info) {
+        info.focus();
+        const espaco = info.value ? '\n\n' : '';
+        nativeTextAreaValueSetter.call(info, info.value + espaco + valor);
+        info.dispatchEvent(new Event('input', { bubbles: true }));
+        info.dispatchEvent(new Event('change', { bubbles: true }));
+        info.blur();
+    }
+}
+
+function preencherCidExtrato(cid) {
+    const seletor = 'p-inputmask[controllabel="CID principal"] input';
+    const input = document.querySelector(seletor);
+    if (input) {
+        preencherCampoExtracao(seletor, cid);
+        input.focus();
+        input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab', code: 'Tab', keyCode: 9 }));
+    } else {
+        alert('Campo CID não encontrado');
+    }
+}
+
+function preencherCampoDataExtrato(dataStr) {
+    const dataNascInput = document.querySelector('mvcommons-calendar[controllabel="Data de nascimento"] input') || 
+                          document.querySelector('mvcommons-calendar[controllabel="Nascimento"] input');
+    if (!dataNascInput) {
+        alert('Campo de data não encontrado');
+        return;
+    }
+    dataNascInput.focus();
+    dataNascInput.value = '';
+    dataNascInput.dispatchEvent(new Event('input', { bubbles: true }));
+    
+    let i = 0;
+    function digitarProximoCaractere() {
+        if (i < dataStr.length) {
+            const char = dataStr[i];
+            dataNascInput.value += char;
+            dataNascInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: char, code: 'Key' + char.toUpperCase() }));
+            dataNascInput.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true, key: char, code: 'Key' + char.toUpperCase() }));
+            dataNascInput.dispatchEvent(new Event('input', { bubbles: true }));
+            dataNascInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: char, code: 'Key' + char.toUpperCase() }));
+            i++;
+            setTimeout(digitarProximoCaractere, 15);
+        } else {
+            dataNascInput.dispatchEvent(new Event('change', { bubbles: true }));
+            dataNascInput.blur();
+            dataNascInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        }
+    }
+    digitarProximoCaractere();
+}
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'inserir_cpf') {
+        const valorLimpo = request.valor.replace(/\D/g, '');
+        if (valorLimpo.length <= 11) {
+            // É CPF
+            const seletorCpf = 'p-inputmask[controllabel="CPF"] input, p-inputmask[formcontrolname="cpf"] input, input[formcontrolname="cpf"]';
+            const preencheu = preencherCampoExtracao(seletorCpf, valorLimpo);
+            if (!preencheu) alert('Campo CPF não encontrado na página.');
+        } else {
+            // É CNS
+            const seletorCns = 'p-inputmask[controllabel="Cartão SUS"] input, p-inputmask[formcontrolname="cartaoSus"] input, input[formcontrolname="cns"]';
+            const preencheu = preencherCampoExtracao(seletorCns, valorLimpo);
+            if (!preencheu) alert('Campo Cartão SUS (CNS) não encontrado na página.');
+        }
+    } else if (request.action === 'inserir_nome') {
+        if(!preencherCampoExtracao('input[controllabel="Cidadão"]', request.valor)) {
+            preencherCampoExtracao('input[controllabel="Nome Completo"]', request.valor);
+        }
+    } else if (request.action === 'inserir_data') {
+        preencherCampoDataExtrato(request.valor);
+    } else if (request.action === 'inserir_cid') {
+        preencherCidExtrato(request.valor);
+    } else if (request.action === 'inserir_profissional') {
+        const dadosProf = request.valor; // { nome, crm }
+        const textoParaInserir = dadosProf.nome + (dadosProf.crm ? ' - ' + dadosProf.crm : '');
+        
+        const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        
+        const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
+        if (hipotese) {
+            const espaco = hipotese.value ? '\n' : '';
+            nativeTextAreaValueSetter.call(hipotese, hipotese.value + espaco + textoParaInserir);
+            hipotese.dispatchEvent(new Event('input', { bubbles: true }));
+            hipotese.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        const info = document.querySelector('textarea[controllabel="Informação Complementar"]');
+        if (info) {
+            const espaco = info.value ? '\n' : '';
+            nativeTextAreaValueSetter.call(info, info.value + espaco + textoParaInserir);
+            info.dispatchEvent(new Event('input', { bubbles: true }));
+            info.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    } else if (request.action === 'inserir_motivo') {
+        preencherMotivoExtrato(request.valor);
+    }
+});
+
 function buscarCNS() {
   console.log('Buscar CNS clicado');
   const cpfInput = document.querySelector('p-inputmask[controllabel="CPF"] input');

@@ -511,6 +511,7 @@
     <button class="tab-btn" data-tab="tab-medicos">Médicos</button>
     <button class="tab-btn" data-tab="tab-procedimentos">Procedimentos</button>
     <button class="tab-btn" data-tab="tab-cids">CIDs</button>
+    <button class="tab-btn" data-tab="tab-extrator">Extrator IA</button>
   </nav>
 
   <!-- TAB: GERAL -->
@@ -536,6 +537,25 @@
     </div>
 
     <button class="btn btn-secondary" id="mostrarAtalhos">⌨️ Ver Atalhos do Autocomplete</button>
+  </div>
+
+  <!-- TAB: EXTRATOR IA -->
+  <div class="tab-container" id="tab-extrator">
+    <div class="card">
+      <div class="card-title">Extrair Guia de Encaminhamento</div>
+      <p style="font-size:12px; color:#64748b; margin-bottom: 12px;">Selecione o PDF para extrair os dados e preencher automaticamente.</p>
+      
+      <input type="file" id="extrator-pdf-input" accept="application/pdf" style="display:none">
+      <button class="btn btn-primary" id="btn-selecionar-pdf" style="background:#673ab7; margin-bottom:12px;">📄 Selecionar PDF</button>
+      
+      <div id="extrator-loading" style="display:none; font-size:12px; color:#673ab7; font-weight:bold; margin-bottom:12px;">Processando com IA... Aguarde...</div>
+      <div id="extrator-erro" style="display:none; font-size:12px; color:#ef4444; font-weight:bold; margin-bottom:12px;"></div>
+      
+      <div id="extrator-resultados" style="display:none; flex-direction:column; gap:6px;">
+        <strong style="font-size:12px; color:#333;">Dados Extraídos (Clique para Inserir):</strong>
+        <div id="botoes-extrator"></div>
+      </div>
+    </div>
   </div>
 
   <!-- TAB: MÉDICOS -->
