@@ -29,6 +29,25 @@ let isDuplicidade = false;
 // Controle de Pesquisa
 window.cidadaosIncompletos = new Set();
 
+// Controle de bloqueio CID → Hipótese/Informação
+let cidPrincipalPreenchido = false;
+let observerCidAtivo = false;
+let codigoCidAtual = '';       // Código CID atualmente confirmado (ex: "A123")
+let descricaoCidAtual = '';    // Descrição inserida nos campos (para find/replace)
+
+// Pré Diagnósticos
+let prediagnosticosGlobais = [];
+
+chrome.storage.local.get('prediagnosticosCustomizados', (data) => {
+  prediagnosticosGlobais = data.prediagnosticosCustomizados || [];
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.prediagnosticosCustomizados) {
+    prediagnosticosGlobais = changes.prediagnosticosCustomizados.newValue || [];
+  }
+});
+
 // Injeta o interceptor de rede para capturar JSONs do sistema
 function injetarInterceptor() {
   try {
@@ -119,6 +138,11 @@ function verificarFormulario() {
     if (container) {
       container.remove();
       botoesInjetados = false;
+      // Reseta controle de bloqueio CID ao sair do formulário
+      observerCidAtivo = false;
+      cidPrincipalPreenchido = false;
+      codigoCidAtual = '';
+      descricaoCidAtual = '';
       console.log('Formulário fechado, botões removidos');
     }
   }
@@ -281,6 +305,8 @@ function preencherCidExtrato(cid) {
         preencherCampoExtracao(seletor, cid);
         input.focus();
         input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Tab', code: 'Tab', keyCode: 9 }));
+        // Verifica CID após preenchimento programático para desbloquear hipótese/informação
+        setTimeout(() => verificarCidPrincipalPreenchido(), 1000);
     } else {
         alert('Campo CID não encontrado');
     }
@@ -727,9 +753,7 @@ function removerTelaDeCarregamento() {
   }
 }
 
-// Observa as mudanças no DOM para remoção de carregamento
-const observerCarregamento = new MutationObserver(removerTelaDeCarregamento);
-observerCarregamento.observe(document.body, { childList: true, subtree: true });
+// Remoção de carregamento agora é feita pelo observerDOMInstantaneo (observer unificado)
 
 // ============================================
 // FUNCIONALIDADE 3: MONITOR DE ELEMENTOS
@@ -847,6 +871,20 @@ function bloquearCamposGlobais() {
     btnSalvar.disabled = true;
     btnSalvar.style.pointerEvents = 'none';
     btnSalvar.style.opacity = '0.5';
+  }
+
+  // Garantir que o botão pesquisar NUNCA seja bloqueado
+  const btnPesquisar = document.querySelector('button.btn-pesquisar');
+  if (btnPesquisar) {
+    btnPesquisar.disabled = false;
+    btnPesquisar.style.pointerEvents = 'auto';
+    btnPesquisar.style.opacity = '1';
+    // Se ele estiver dentro de um container bloqueado (como mvcommons-autocomplete), precisamos garantir
+    const parent = btnPesquisar.closest('mvcommons-autocomplete');
+    if (parent) {
+      parent.style.pointerEvents = 'auto';
+      parent.style.opacity = '1';
+    }
   }
 }
 
@@ -1151,6 +1189,11 @@ function verificarTodos() {
     } else {
       isPacienteCidadeInvalida = false;
     }
+  } else {
+    // Se o cadastro foi limpo (cidade sumiu), não tem cidade inválida nem vila uruçuba
+    isPacienteCidadeInvalida = false;
+    isPacienteVilaUrucuba = false;
+    isDuplicidade = false;
   }
 
   const idade = obterIdadeDoPaciente();
@@ -1166,6 +1209,164 @@ function verificarTodos() {
   }
   
   verificarBloqueios(false);
+  verificarPreDiagnosticos();
+}
+
+// ============================================
+// PRÉ DIAGNÓSTICOS
+// ============================================
+function verificarPreDiagnosticos() {
+  const inputItem = document.querySelector('mvcommons-autocomplete[formcontrolname="itemAgendamento"] input') || 
+                    document.querySelector('input[formcontrolname="itemAgendamento"]') ||
+                    document.querySelector('p-inputmask[formcontrolname="itemAgendamento"] input');
+  
+  const hipoteseTextarea = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
+  if (!hipoteseTextarea) return;
+
+  let matchPrediag = null;
+  if (inputItem && inputItem.value) {
+    const valorItem = inputItem.value.trim().toUpperCase();
+    if (valorItem.length >= 3) {
+      matchPrediag = prediagnosticosGlobais.find(p => {
+        const ag = p.itemAgendamento.toUpperCase();
+        return valorItem === ag; // Apenas correspondência exata (após clicar no dropdown)
+      });
+    }
+  }
+
+  let btnPrediag = document.getElementById('cmce-prediag-btn');
+
+  if (matchPrediag) {
+    if (!btnPrediag) {
+      btnPrediag = document.createElement('div');
+      btnPrediag.id = 'cmce-prediag-btn';
+      btnPrediag.title = 'Adicionar Pré Diagnóstico';
+      btnPrediag.textContent = 'HD';
+      btnPrediag.style.cssText = `
+        position: absolute;
+        top: -8px;
+        right: 6px;
+        width: 24px;
+        height: 24px;
+        background-color: #28a745;
+        color: white;
+        font-weight: bold;
+        font-size: 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        cursor: pointer;
+        z-index: 100;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      `;
+      const parent = hipoteseTextarea.parentElement;
+      if (getComputedStyle(parent).position === 'static') {
+        parent.style.position = 'relative';
+      }
+      parent.appendChild(btnPrediag);
+    }
+
+    btnPrediag.onclick = (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      abrirModalPreDiagnosticos(matchPrediag.diagnosticos);
+    };
+  } else {
+    if (btnPrediag) {
+      btnPrediag.remove();
+    }
+  }
+}
+
+function abrirModalPreDiagnosticos(diagnosticos) {
+  let modal = document.getElementById('cmce-prediag-modal');
+  if (modal) modal.remove();
+
+  modal = document.createElement('div');
+  modal.id = 'cmce-prediag-modal';
+  modal.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 320px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+  `;
+
+  const header = document.createElement('div');
+  header.style.cssText = `
+    background: #28a745;
+    color: white;
+    padding: 12px;
+    font-weight: bold;
+    text-align: center;
+    font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  `;
+  
+  const spanTitle = document.createElement('span');
+  spanTitle.textContent = 'Pré Diagnósticos';
+  const spanClose = document.createElement('span');
+  spanClose.textContent = '✕';
+  spanClose.style.cursor = 'pointer';
+  spanClose.onclick = () => modal.remove();
+  
+  header.appendChild(spanTitle);
+  header.appendChild(spanClose);
+  
+  const list = document.createElement('div');
+  list.style.cssText = `
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  `;
+
+  diagnosticos.forEach(diag => {
+    const diagUpper = diag.toUpperCase();
+    const item = document.createElement('div');
+    item.textContent = diagUpper;
+    item.style.cssText = `
+      padding: 10px;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.2s;
+    `;
+    item.onmouseover = () => item.style.background = '#e9ecef';
+    item.onmouseout = () => item.style.background = '#f8f9fa';
+    item.onclick = () => {
+      const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
+      if (hipotese) {
+        hipotese.focus();
+        const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        const espaco = hipotese.value ? '\n' : '';
+        nativeTextAreaValueSetter.call(hipotese, hipotese.value + espaco + diagUpper);
+        hipotese.dispatchEvent(new Event('input', { bubbles: true }));
+        hipotese.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      modal.remove();
+    };
+    list.appendChild(item);
+  });
+
+  modal.appendChild(header);
+  modal.appendChild(list);
+  document.body.appendChild(modal);
 }
 
 // ============================================
@@ -1272,20 +1473,27 @@ function substituirFotoCidadao() {
       img.setAttribute('data-booster-foto-alterada', 'true');
       const idx = Math.floor(Math.random() * imagensAssets.length);
       try {
-        if (!chrome || !chrome.runtime || !chrome.runtime.getURL) {
+        if (!chrome || !chrome.runtime || !chrome.runtime.id) {
           throw new Error("API do Chrome indisponível");
         }
         img.src = chrome.runtime.getURL(`assets/${imagensAssets[idx]}`);
       } catch (error) {
         blockImageReplacement = true;
-        console.warn('CMCE BOOSTER: Erro fatal ao substituir foto. Funcionalidade desativada temporariamente.', error);
+        if (!error.message.includes("Extension context invalidated") && !error.message.includes("API do Chrome")) {
+          console.warn('CMCE BOOSTER: Erro fatal ao substituir foto. Funcionalidade desativada temporariamente.', error);
+        }
       }
     }
   });
 }
 
-// Observer para tornar a substituição instantânea sem lag
-const observerDOMInstantaneo = new MutationObserver((mutations) => {
+// ============================================
+// OBSERVER UNIFICADO (substitui observerCarregamento + observerDOMInstantaneo + setIntervals)
+// ============================================
+let observerThrottled = false;
+
+const observerUnificado = new MutationObserver((mutations) => {
+  // Verifica tipo de mutação
   let mudouEstrutura = false;
   let mudouImgSrc = false;
   for (const mut of mutations) {
@@ -1297,25 +1505,41 @@ const observerDOMInstantaneo = new MutationObserver((mutations) => {
       mudouImgSrc = true;
     }
   }
-  
+
+  // Foto: reage imediatamente a mudanças de src (muito leve)
   if (mudouImgSrc) {
     substituirFotoCidadao();
   }
-  if (mudouEstrutura) {
-    atualizarHeaderSistema();
-    destacarCidadaosIncompletos();
-    adicionarBotaoContinuar();
-    
-    // Autoclick instantâneo na tela inicial se vier do botão "Continuar Cadastrando"
-    if (sessionStorage.getItem('boosterAutoNovoCadastro') === 'true') {
-      const btnNovo = Array.from(document.querySelectorAll('button')).find(b => b.title === 'Solicitação de procedimento');
-      if (btnNovo && !btnNovo.disabled) {
-        sessionStorage.removeItem('boosterAutoNovoCadastro');
-        // Usamos um delay quase imperceptível de 100ms apenas para garantir que o Angular 
-        // já anexou os eventos de (click) neste botão recém nascido no DOM
-        setTimeout(() => btnNovo.click(), 100); 
+
+  // Remoção de carregamento: reage imediatamente (muito leve, 1 querySelector)
+  removerTelaDeCarregamento();
+
+  // Para o resto, usa throttle via requestAnimationFrame
+  // Evita rodar 100x por segundo durante re-renders pesados do Angular
+  if (mudouEstrutura && !observerThrottled) {
+    observerThrottled = true;
+    requestAnimationFrame(() => {
+      observerThrottled = false;
+
+      // Funções que antes eram setInterval separados
+      verificarFormulario();
+      verificarHistoricoAutomatico();
+
+      // Funções visuais/estruturais
+      atualizarHeaderSistema();
+      destacarCidadaosIncompletos();
+      adicionarBotaoContinuar();
+      inicializarBloqueioCid();
+
+      // Autoclick na tela inicial se vier do botão "Continuar Cadastrando"
+      if (sessionStorage.getItem('boosterAutoNovoCadastro') === 'true') {
+        const btnNovo = Array.from(document.querySelectorAll('button')).find(b => b.title === 'Solicitação de procedimento');
+        if (btnNovo && !btnNovo.disabled) {
+          sessionStorage.removeItem('boosterAutoNovoCadastro');
+          setTimeout(() => btnNovo.click(), 100);
+        }
       }
-    }
+    });
   }
 });
 
@@ -1455,18 +1679,286 @@ function adicionarBotaoContinuar() {
 }
 
 // ============================================
+// BLOQUEIO DE HIPÓTESE/INFORMAÇÃO ATÉ CID PRINCIPAL
+// ============================================
+function criarAvisoCidBloqueado() {
+  // Remove aviso existente se houver
+  const avisoExistente = document.getElementById('cmce-aviso-cid-bloqueado');
+  if (avisoExistente) avisoExistente.remove();
+
+  const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
+  if (!hipotese) return;
+
+  const container = hipotese.closest('.hipotese-diagnostica') || hipotese.parentElement;
+  if (!container) return;
+
+  const aviso = document.createElement('span');
+  aviso.id = 'cmce-aviso-cid-bloqueado';
+  aviso.textContent = '⚠ Preencha o CID primeiro';
+  aviso.style.cssText = `
+    display: inline-block;
+    margin-left: 10px;
+    padding: 2px 8px;
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    vertical-align: middle;
+    animation: cmce-pulsar 2s ease-in-out infinite;
+  `;
+
+  // Injeta animação CSS se não existir
+  if (!document.getElementById('cmce-aviso-cid-style')) {
+    const style = document.createElement('style');
+    style.id = 'cmce-aviso-cid-style';
+    style.textContent = `
+      @keyframes cmce-pulsar {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Insere ao lado do label
+  const label = container.querySelector('label');
+  if (label) {
+    label.insertAdjacentElement('afterend', aviso);
+  } else {
+    container.insertBefore(aviso, hipotese);
+  }
+}
+
+function removerAvisoCidBloqueado() {
+  const aviso = document.getElementById('cmce-aviso-cid-bloqueado');
+  if (aviso) aviso.remove();
+}
+
+function bloquearCamposHipoteseInfo() {
+  const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
+  const info = document.querySelector('textarea[controllabel="Informação Complementar"]');
+
+  [hipotese, info].forEach(campo => {
+    if (campo) {
+      campo.disabled = true;
+      campo.style.pointerEvents = 'none';
+      campo.style.opacity = '0.5';
+      campo.style.backgroundColor = '#f0f0f0';
+    }
+  });
+
+  criarAvisoCidBloqueado();
+}
+
+function desbloquearCamposHipoteseInfo() {
+  const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
+  const info = document.querySelector('textarea[controllabel="Informação Complementar"]');
+
+  [hipotese, info].forEach(campo => {
+    if (campo) {
+      campo.disabled = false;
+      campo.style.pointerEvents = '';
+      campo.style.opacity = '';
+      campo.style.backgroundColor = '';
+    }
+  });
+
+  removerAvisoCidBloqueado();
+}
+
+function atualizarTextareaCid(textarea, descricaoAnterior, descricaoNova) {
+  if (!textarea) return;
+
+  const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+  let valorAtual = textarea.value || '';
+
+  if (descricaoAnterior && valorAtual.includes(descricaoAnterior)) {
+    // SUBSTITUIR ou REMOVER a descrição anterior
+    if (descricaoNova) {
+      valorAtual = valorAtual.replace(descricaoAnterior, descricaoNova);
+    } else {
+      // Remove a descrição e limpa quebras de linha extras
+      valorAtual = valorAtual.replace(descricaoAnterior, '').replace(/^\n+|\n+$/g, '').replace(/\n{3,}/g, '\n\n');
+    }
+  } else if (descricaoNova) {
+    // INSERIR nova descrição (primeira vez ou descrição anterior não encontrada)
+    const espaco = valorAtual.trim() ? '\n\n' : '';
+    valorAtual = valorAtual + espaco + descricaoNova;
+  }
+
+  nativeTextAreaValueSetter.call(textarea, valorAtual);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  textarea.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function aplicarDescricaoCidNosCampos(descricaoAnterior, descricaoNova) {
+  const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
+  const info = document.querySelector('textarea[controllabel="Informação Complementar"]');
+
+  // Atualiza hipótese
+  atualizarTextareaCid(hipotese, descricaoAnterior, descricaoNova);
+  // Atualiza informação diretamente (sem depender do espelhamento para evitar duplicações)
+  atualizarTextareaCid(info, descricaoAnterior, descricaoNova);
+}
+
+function obterDescricaoCidPrincipal() {
+  const acInput = document.querySelector('mvcommons-autocomplete[formcontrolname="cidPrincipal"] input');
+  if (acInput && acInput.value && acInput.value.trim().length > 0) {
+    return acInput.value.trim().toUpperCase();
+  }
+  return null;
+}
+
+function obterCodigoCidAtual() {
+  const cidInput = document.querySelector('p-inputmask[formcontrolname="codigoCidPrincipal"] input');
+  if (!cidInput) return '';
+  return (cidInput.value || '').replace(/[\s._-]/g, '');
+}
+
+function verificarCidPrincipalPreenchido() {
+  const codigoNovo = obterCodigoCidAtual();
+  const temCid = codigoNovo.length >= 3;
+
+  // Caso 1: CID preenchido pela primeira vez
+  if (temCid && !cidPrincipalPreenchido) {
+    cidPrincipalPreenchido = true;
+    codigoCidAtual = codigoNovo;
+
+    setTimeout(() => {
+      const descricaoNova = obterDescricaoCidPrincipal();
+      desbloquearCamposHipoteseInfo();
+
+      if (descricaoNova) {
+        aplicarDescricaoCidNosCampos('', descricaoNova);
+        descricaoCidAtual = descricaoNova;
+      }
+      console.log('CMCE BOOSTER - CID preenchido:', codigoNovo, '→', descricaoNova);
+    }, 800);
+    return;
+  }
+
+  // Caso 2: CID mudou para outro
+  if (temCid && cidPrincipalPreenchido && codigoNovo !== codigoCidAtual) {
+    const descricaoAnterior = descricaoCidAtual;
+    codigoCidAtual = codigoNovo;
+
+    setTimeout(() => {
+      const descricaoNova = obterDescricaoCidPrincipal();
+
+      if (descricaoNova && descricaoNova !== descricaoAnterior) {
+        aplicarDescricaoCidNosCampos(descricaoAnterior, descricaoNova);
+        descricaoCidAtual = descricaoNova;
+        console.log('CMCE BOOSTER - CID alterado:', descricaoAnterior, '→', descricaoNova);
+      }
+    }, 800);
+    return;
+  }
+
+  // Caso 3: CID removido
+  if (!temCid && cidPrincipalPreenchido) {
+    const descricaoAnterior = descricaoCidAtual;
+    cidPrincipalPreenchido = false;
+    codigoCidAtual = '';
+
+    // Remove a descrição dos campos
+    if (descricaoAnterior) {
+      aplicarDescricaoCidNosCampos(descricaoAnterior, '');
+      descricaoCidAtual = '';
+      console.log('CMCE BOOSTER - CID removido. Descrição removida:', descricaoAnterior);
+    }
+
+    bloquearCamposHipoteseInfo();
+  }
+}
+
+function inicializarBloqueioCid() {
+  if (observerCidAtivo) return;
+
+  const cidInput = document.querySelector('p-inputmask[formcontrolname="codigoCidPrincipal"] input');
+  const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
+  
+  if (!cidInput || !hipotese) return;
+
+  observerCidAtivo = true;
+
+  // Verifica estado inicial
+  const codigoInicial = obterCodigoCidAtual();
+  if (codigoInicial.length >= 3) {
+    cidPrincipalPreenchido = true;
+    codigoCidAtual = codigoInicial;
+    // Tenta capturar a descrição já presente
+    const descInicial = obterDescricaoCidPrincipal();
+    if (descInicial) descricaoCidAtual = descInicial;
+  } else {
+    cidPrincipalPreenchido = false;
+    bloquearCamposHipoteseInfo();
+  }
+
+  // Monitora o campo de CÓDIGO do CID (blur = clicou fora ou Tab)
+  cidInput.addEventListener('blur', () => {
+    verificarCidPrincipalPreenchido();
+  });
+
+  // Monitora o campo de DESCRIÇÃO/autocomplete do CID
+  const acInput = document.querySelector('mvcommons-autocomplete[formcontrolname="cidPrincipal"] input');
+  if (acInput) {
+    // Observa cliques nos itens do autocomplete (seleção)
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.ui-autocomplete-list-item') || e.target.closest('li.ui-autocomplete-list-item')) {
+        setTimeout(() => verificarCidPrincipalPreenchido(), 500);
+      }
+    }, true);
+
+    // Monitora mudanças no campo de código (preenchimento programático)
+    const observerCodigo = new MutationObserver(() => {
+      setTimeout(() => verificarCidPrincipalPreenchido(), 500);
+    });
+    observerCodigo.observe(cidInput, { attributes: true, attributeFilter: ['value'] });
+
+    // Backup: monitora input/change no campo de código
+    cidInput.addEventListener('input', () => {
+      setTimeout(() => verificarCidPrincipalPreenchido(), 500);
+    });
+    cidInput.addEventListener('change', () => {
+      setTimeout(() => verificarCidPrincipalPreenchido(), 500);
+    });
+  }
+
+  console.log('CMCE BOOSTER - Monitoramento de CID (bloqueio + mudança + remoção) ativado.');
+}
+
+// ============================================
+// ATALHOS DE TECLADO
+// ============================================
+function inicializarAtalhos() {
+  document.addEventListener('keydown', (e) => {
+    // Ctrl+S → Salvar
+    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 's') {
+      const btnSalvar = document.querySelector('button[title="Salvar"]');
+      if (btnSalvar && !btnSalvar.disabled) {
+        e.preventDefault(); // Impede o "Salvar página" do navegador
+        btnSalvar.click();
+        console.log('CMCE BOOSTER - Atalho Ctrl+S: Botão Salvar clicado');
+      }
+    }
+  }, true);
+}
+
+// ============================================
 // INICIALIZAÇÃO
 // ============================================
 function iniciar() {
-  // Verifica formulário para busca CNS/CPF
-  setInterval(verificarFormulario, 3000);
+  // Execuções iniciais (primeira rodada antes de qualquer observer/interval)
   verificarFormulario();
+  atualizarHeaderSistema();
+  substituirFotoCidadao();
   
-  // Inicializa a verificação automática de histórico
-  setInterval(verificarHistoricoAutomatico, 3000);
-  
-  // Inicializa o espelhamento de campos (Hipótese -> Informação)
+  // Inicializa funcionalidades baseadas em eventos (rodam 1x)
   inicializarEspelhamentoCampos();
+  inicializarAtalhos();
+  inicializarBloqueioCid();
   
   // Carrega estado da remoção de carregamento
   chrome.storage.local.get('removerAtivo', function(data) {
@@ -1477,19 +1969,34 @@ function iniciar() {
     }
   });
   
-  // Inicia monitoramento de elementos constante
-  setInterval(verificarTodos, 2000);
-  
-  // Substituições instantâneas usando MutationObserver (Foto e Header)
-  observerDOMInstantaneo.observe(document.body, { 
+  // ============================================
+  // OBSERVER UNIFICADO — reage a mudanças no DOM em tempo real
+  // Substitui: observerCarregamento + observerDOMInstantaneo
+  // Absorve: verificarFormulario + verificarHistoricoAutomatico
+  // ============================================
+  observerUnificado.observe(document.body, { 
     childList: true, 
     subtree: true, 
     attributes: true, 
     attributeFilter: ['src'] 
   });
-  atualizarHeaderSistema();
-  substituirFotoCidadao();
   
+  // ============================================
+  // FALLBACK ÚNICO (3s) — pega edge cases que o Observer pode perder
+  // Substitui: setInterval(verificarFormulario, 3000)
+  //          + setInterval(verificarHistoricoAutomatico, 3000)
+  //          + setInterval(verificarTodos, 2000)
+  // ============================================
+  setInterval(() => {
+    verificarFormulario();
+    verificarHistoricoAutomatico();
+    verificarTodos();
+  }, 3000);
+  
+  // ============================================
+  // DEBOUNCE REATIVO — verificarTodos ao parar de digitar/alterar campos
+  // (mais responsivo que o fallback de 3s para ações do usuário)
+  // ============================================
   document.addEventListener("input", aoPararDeDigitar, true);
   
   document.addEventListener(
@@ -1507,6 +2014,8 @@ function iniciar() {
     },
     true
   );
+  
+  console.log('CMCE BOOSTER - Inicializado com observer unificado + fallback 3s + debounce reativo');
 }
 
 if (document.readyState === "loading") {

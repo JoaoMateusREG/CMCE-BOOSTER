@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CMCE BOOSTER",
-  "version": "1.4",
+  "version": "1.5",
   "description": "Extensão unificada para CMCE: busca CNS/CPF, remove carregamento e monitora elementos",
   "action": {
     "default_popup": "popup.html"

@@ -401,7 +401,7 @@ ATALHOS DISPONÍVEIS:
     const minVal = procMin.value.trim();
     const maxVal = procMax.value.trim();
     const exato = procExato.checked;
-    const mensagem = procMsg.value.trim();
+    const mensagem = procMsg.value.trim().toUpperCase();
     const idx = editProcIdx.value;
 
     if (!termo || !mensagem) {
@@ -450,7 +450,157 @@ ATALHOS DISPONÍVEIS:
 
 
   // ============================================
-  // TAB 4: CIDS
+  // TAB 4: PRÉ DIAGNÓSTICOS
+  // ============================================
+  const btnTogglePrediag = document.getElementById('btn-toggle-prediag');
+  const formPrediag = document.getElementById('form-prediag');
+  const listPrediag = document.getElementById('list-prediag');
+  const searchPrediag = document.getElementById('search-prediag');
+
+  const prediagItem = document.getElementById('prediag-item');
+  const prediagLista = document.getElementById('prediag-lista');
+  const btnSalvarPrediag = document.getElementById('btn-salvar-prediag');
+  const btnCancelarPrediag = document.getElementById('btn-cancelar-prediag');
+  const editPrediagIdx = document.getElementById('edit-prediag-idx');
+
+  btnTogglePrediag.addEventListener('click', () => {
+    formPrediag.classList.toggle('open');
+    if (formPrediag.classList.contains('open')) {
+      btnTogglePrediag.textContent = 'Fechar';
+      btnTogglePrediag.className = 'btn btn-danger btn-toggle-form';
+      resetFormPrediag();
+    } else {
+      btnTogglePrediag.textContent = '+ Novo';
+      btnTogglePrediag.className = 'btn btn-success btn-toggle-form';
+    }
+  });
+
+  btnCancelarPrediag.addEventListener('click', (e) => {
+    e.preventDefault();
+    formPrediag.classList.remove('open');
+    btnTogglePrediag.textContent = '+ Novo';
+    btnTogglePrediag.className = 'btn btn-success btn-toggle-form';
+    resetFormPrediag();
+  });
+
+  function resetFormPrediag() {
+    prediagItem.value = '';
+    prediagLista.value = '';
+    editPrediagIdx.value = '';
+    btnSalvarPrediag.textContent = 'Salvar';
+  }
+
+  function renderPrediag() {
+    const query = searchPrediag.value.toLowerCase().trim();
+    chrome.storage.local.get('prediagnosticosCustomizados', (data) => {
+      const prediags = data.prediagnosticosCustomizados || [];
+      listPrediag.innerHTML = '';
+
+      const filtered = prediags.filter(p => 
+        p.itemAgendamento.toLowerCase().includes(query) || 
+        p.diagnosticos.join(' ').toLowerCase().includes(query)
+      );
+
+      if (filtered.length === 0) {
+        listPrediag.innerHTML = `<div style="text-align:center; padding:20px; font-size:12px; color:#94a3b8;">Nenhum pré diagnóstico encontrado.</div>`;
+        return;
+      }
+
+      filtered.forEach((prediag) => {
+        const origIndex = prediags.findIndex(p => p.itemAgendamento === prediag.itemAgendamento);
+
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        card.innerHTML = `
+          <div class="item-info">
+            <h3>${prediag.itemAgendamento}</h3>
+            <p>${prediag.diagnosticos.length} diagnóstico(s) listado(s)</p>
+          </div>
+          <div class="item-actions">
+            <button class="btn-action btn-action-edit" data-idx="${origIndex}" title="Editar">✏️</button>
+            <button class="btn-action btn-action-delete" data-idx="${origIndex}" title="Excluir">❌</button>
+          </div>
+        `;
+        listPrediag.appendChild(card);
+      });
+
+      listPrediag.querySelectorAll('.btn-action-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = btn.getAttribute('data-idx');
+          preencherEditPrediag(idx, prediags[idx]);
+        });
+      });
+
+      listPrediag.querySelectorAll('.btn-action-delete').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = btn.getAttribute('data-idx');
+          if (confirm(`Deseja excluir o pré diagnóstico de "${prediags[idx].itemAgendamento}"?`)) {
+            excluirPrediag(idx, prediags);
+          }
+        });
+      });
+    });
+  }
+
+  function preencherEditPrediag(idx, prediag) {
+    formPrediag.classList.add('open');
+    btnTogglePrediag.textContent = 'Fechar';
+    btnTogglePrediag.className = 'btn btn-danger btn-toggle-form';
+
+    prediagItem.value = prediag.itemAgendamento;
+    prediagLista.value = prediag.diagnosticos.join('\n');
+    editPrediagIdx.value = idx;
+    btnSalvarPrediag.textContent = 'Salvar Alterações';
+  }
+
+  btnSalvarPrediag.addEventListener('click', (e) => {
+    e.preventDefault();
+    const item = prediagItem.value.trim().toUpperCase();
+    const listaText = prediagLista.value.trim();
+    const idx = editPrediagIdx.value;
+
+    if (!item || !listaText) {
+      alert('Item de agendamento e lista de diagnósticos são obrigatórios.');
+      return;
+    }
+
+    const diagnosticos = listaText.split('\n').map(d => d.trim().toUpperCase()).filter(d => d !== '');
+
+    chrome.storage.local.get('prediagnosticosCustomizados', (data) => {
+      const prediags = data.prediagnosticosCustomizados || [];
+      const novoPrediag = {
+        itemAgendamento: item,
+        diagnosticos: diagnosticos
+      };
+
+      if (idx === '') {
+        prediags.push(novoPrediag);
+      } else {
+        prediags[idx] = novoPrediag;
+      }
+
+      chrome.storage.local.set({ prediagnosticosCustomizados: prediags }, () => {
+        resetFormPrediag();
+        formPrediag.classList.remove('open');
+        btnTogglePrediag.textContent = '+ Novo';
+        btnTogglePrediag.className = 'btn btn-success btn-toggle-form';
+        renderPrediag();
+      });
+    });
+  });
+
+  function excluirPrediag(idx, prediags) {
+    prediags.splice(idx, 1);
+    chrome.storage.local.set({ prediagnosticosCustomizados: prediags }, () => {
+      renderPrediag();
+    });
+  }
+
+  searchPrediag.addEventListener('input', renderPrediag);
+
+
+  // ============================================
+  // TAB 5: CIDS
   // ============================================
   const btnToggleCid = document.getElementById('btn-toggle-cid');
   const formCid = document.getElementById('form-cid');
@@ -561,7 +711,7 @@ ATALHOS DISPONÍVEIS:
     e.preventDefault();
     const codigo = cidCodigo.value.trim().toUpperCase();
     const exato = cidExato.checked;
-    const mensagem = cidMsg.value.trim();
+    const mensagem = cidMsg.value.trim().toUpperCase();
     const idx = editCidIdx.value;
 
     if (!codigo || !mensagem) {
@@ -619,6 +769,9 @@ ATALHOS DISPONÍVEIS:
         if (changes.cidsCustomizados) {
           renderCIDs();
         }
+        if (changes.prediagnosticosCustomizados) {
+          renderPrediag();
+        }
       }
     });
   }
@@ -673,10 +826,25 @@ ATALHOS DISPONÍVEIS:
           chrome.storage.local.get(storageKey, (data) => {
             let currentItems = data[storageKey] || [];
             
+            const toUpperRecursive = (obj) => {
+              if (typeof obj === 'string') return obj.toUpperCase();
+              if (Array.isArray(obj)) return obj.map(toUpperRecursive);
+              if (typeof obj === 'object' && obj !== null) {
+                const newObj = {};
+                for (let key in obj) {
+                  newObj[key] = toUpperRecursive(obj[key]);
+                }
+                return newObj;
+              }
+              return obj;
+            };
+
+            const processedItems = importedItems.map(toUpperRecursive);
+
             if (substituir) {
-              currentItems = importedItems;
+              currentItems = processedItems;
             } else {
-              importedItems.forEach(importItem => {
+              processedItems.forEach(importItem => {
                 const isDuplicate = currentItems.some(currItem => duplicateCheckFn(currItem, importItem));
                 if (!isDuplicate) {
                   currentItems.push(importItem);
@@ -698,6 +866,104 @@ ATALHOS DISPONÍVEIS:
     });
   }
 
+  // ============================================
+  // BACKUP GLOBAL (HEADER)
+  // ============================================
+  const btnExportGlobal = document.getElementById('btn-export-global');
+  if (btnExportGlobal) {
+    btnExportGlobal.addEventListener('click', () => {
+      chrome.storage.local.get(['medicosCustomizados', 'procedimentosCustomizados', 'cidsCustomizados', 'prediagnosticosCustomizados'], (data) => {
+        const payload = {
+          medicosCustomizados: data.medicosCustomizados || [],
+          procedimentosCustomizados: data.procedimentosCustomizados || [],
+          cidsCustomizados: data.cidsCustomizados || [],
+          prediagnosticosCustomizados: data.prediagnosticosCustomizados || []
+        };
+        exportarDados(payload, 'cmce_booster_backup_global');
+        mostrarMensagemOk('Backup Global Exportado!');
+      });
+    });
+  }
+
+  const btnImportGlobal = document.getElementById('btn-import-global');
+  const fileInputGlobal = document.getElementById('file-import-global');
+  if (btnImportGlobal && fileInputGlobal) {
+    btnImportGlobal.addEventListener('click', () => fileInputGlobal.click());
+
+    fileInputGlobal.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const importedData = JSON.parse(event.target.result);
+          
+          if (!importedData.medicosCustomizados && !importedData.procedimentosCustomizados && !importedData.cidsCustomizados && !importedData.prediagnosticosCustomizados) {
+            alert("Formato de backup global inválido.");
+            return;
+          }
+
+          const substituir = confirm("Deseja SUBSTITUIR a base global atual por este backup?\n\n[OK] = Substituir tudo\n[Cancelar] = Mesclar com os dados existentes");
+
+          const toUpperRecursive = (obj) => {
+            if (typeof obj === 'string') return obj.toUpperCase();
+            if (Array.isArray(obj)) return obj.map(toUpperRecursive);
+            if (typeof obj === 'object' && obj !== null) {
+              const newObj = {};
+              for (let key in obj) {
+                newObj[key] = toUpperRecursive(obj[key]);
+              }
+              return newObj;
+            }
+            return obj;
+          };
+
+          const processedData = toUpperRecursive(importedData);
+
+          chrome.storage.local.get(['medicosCustomizados', 'procedimentosCustomizados', 'cidsCustomizados', 'prediagnosticosCustomizados'], (currentData) => {
+            const newData = {};
+
+            const mergeArrays = (key, duplicateCheckFn) => {
+              const currentArr = currentData[key] || [];
+              const importedArr = processedData[key] || [];
+
+              if (substituir) {
+                newData[key] = importedArr;
+              } else {
+                const merged = [...currentArr];
+                importedArr.forEach(importItem => {
+                  if (!merged.some(currItem => duplicateCheckFn(currItem, importItem))) {
+                    merged.push(importItem);
+                  }
+                });
+                newData[key] = merged;
+              }
+            };
+
+            mergeArrays('medicosCustomizados', (a, b) => a.nome === b.nome && a.crm === b.crm);
+            mergeArrays('procedimentosCustomizados', (a, b) => a.valorEsperado === b.valorEsperado && a.mensagem === b.mensagem);
+            mergeArrays('cidsCustomizados', (a, b) => a.valorEsperado === b.valorEsperado && a.mensagem === b.mensagem);
+            mergeArrays('prediagnosticosCustomizados', (a, b) => a.itemAgendamento === b.itemAgendamento);
+
+            chrome.storage.local.set(newData, () => {
+              mostrarMensagemOk('Backup Global Importado!');
+              renderMedicos();
+              renderProcedimentos();
+              renderCIDs();
+              renderPrediag();
+            });
+          });
+
+        } catch (err) {
+          alert("Erro ao ler o arquivo de backup: " + err.message);
+        }
+        fileInputGlobal.value = '';
+      };
+      reader.readAsText(file);
+    });
+  }
+
   setupImportExport('btn-export-medico', 'btn-import-medico', 'file-import-medico', 'medicosCustomizados', 
     (a, b) => a.nome === b.nome && a.crm === b.crm, renderMedicos);
     
@@ -707,11 +973,15 @@ ATALHOS DISPONÍVEIS:
   setupImportExport('btn-export-cid', 'btn-import-cid', 'file-import-cid', 'cidsCustomizados', 
     (a, b) => a.valorEsperado === b.valorEsperado && a.mensagem === b.mensagem, renderCIDs);
 
+  setupImportExport('btn-export-prediag', 'btn-import-prediag', 'file-import-prediag', 'prediagnosticosCustomizados', 
+    (a, b) => a.itemAgendamento === b.itemAgendamento, renderPrediag);
+
   // Render inicial após pequeno delay para garantir que os scripts de banco inicializaram
   setTimeout(() => {
     renderMedicos();
     renderProcedimentos();
     renderCIDs();
+    renderPrediag();
   }, 100);
 
   // ============================================

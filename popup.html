@@ -145,6 +145,7 @@
       font-size: 13px;
       transition: all 0.2s;
       outline: none;
+      text-transform: uppercase;
     }
 
     .form-control:focus {
@@ -503,7 +504,12 @@
 <body>
   <header>
     <h1>CMCE BOOSTER <span>PRO</span></h1>
-    <div class="version-badge">v1.4</div>
+    <div style="display:flex; gap: 8px; align-items: center;">
+      <input type="file" id="file-import-global" accept=".json" style="display:none;">
+      <button class="btn btn-secondary btn-toggle-form" id="btn-import-global" title="Importar Backup Global" style="padding: 2px 6px; font-size: 11px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);">📥 Importar</button>
+      <button class="btn btn-secondary btn-toggle-form" id="btn-export-global" title="Exportar Backup Global" style="padding: 2px 6px; font-size: 11px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3);">📤 Exportar</button>
+      <div class="version-badge">v1.4</div>
+    </div>
   </header>
 
   <nav class="tabs-bar">
@@ -511,6 +517,7 @@
     <button class="tab-btn" data-tab="tab-medicos">Médicos</button>
     <button class="tab-btn" data-tab="tab-procedimentos">Procedimentos</button>
     <button class="tab-btn" data-tab="tab-cids">CIDs</button>
+    <button class="tab-btn" data-tab="tab-prediagnosticos">Pré Diag</button>
     <button class="tab-btn" data-tab="tab-extrator">Extrator IA</button>
   </nav>
 
@@ -537,6 +544,46 @@
     </div>
 
     <button class="btn btn-secondary" id="mostrarAtalhos">⌨️ Ver Atalhos do Autocomplete</button>
+  </div>
+
+  <!-- TAB: PRE DIAGNOSTICOS -->
+  <div class="tab-container" id="tab-prediagnosticos">
+    <div class="section-header">
+      <h2>Pré Diagnósticos</h2>
+      <div style="display: flex; gap: 4px;">
+        <input type="file" id="file-import-prediag" accept=".json" style="display:none;">
+        <button class="btn btn-secondary btn-toggle-form" id="btn-import-prediag" title="Importar">📥</button>
+        <button class="btn btn-secondary btn-toggle-form" id="btn-export-prediag" title="Exportar">📤</button>
+        <button class="btn btn-success btn-toggle-form" id="btn-toggle-prediag">+ Novo</button>
+      </div>
+    </div>
+
+    <!-- Form Cadastro Pre Diag -->
+    <div class="form-container" id="form-prediag">
+      <input type="hidden" id="edit-prediag-idx">
+      <div class="form-group">
+        <label>Item de Agendamento</label>
+        <input type="text" class="form-control" id="prediag-item" placeholder="Ex: CONSULTA EM OFTALMOLOGIA">
+      </div>
+      <div class="form-group">
+        <label>Diagnósticos (um por linha)</label>
+        <textarea class="form-control" id="prediag-lista" placeholder="Ex:&#10;H25 Catarata Senil&#10;H40 Glaucoma" rows="5"></textarea>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" id="btn-cancelar-prediag">Cancelar</button>
+        <button class="btn btn-success" id="btn-salvar-prediag">Salvar</button>
+      </div>
+    </div>
+
+    <!-- Search Box -->
+    <div class="search-box">
+      <input type="text" class="form-control" id="search-prediag" placeholder="Buscar pré diagnósticos...">
+    </div>
+
+    <!-- List of Pre Diags -->
+    <div class="items-list" id="list-prediag">
+      <!-- Loaded dynamically -->
+    </div>
   </div>
 
   <!-- TAB: EXTRATOR IA -->
