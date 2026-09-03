@@ -1210,6 +1210,12 @@ function verificarTodos() {
   
   verificarBloqueios(false);
   verificarPreDiagnosticos();
+
+  // Garante que os campos de hipótese/informação continuem bloqueados
+  // caso o Angular tente re-habilitá-los durante a renderização
+  if (observerCidAtivo && !cidPrincipalPreenchido) {
+    bloquearCamposHipoteseInfo();
+  }
 }
 
 // ============================================
@@ -1736,6 +1742,28 @@ function removerAvisoCidBloqueado() {
   if (aviso) aviso.remove();
 }
 
+// Prevenção agressiva de eventos (captura global)
+document.addEventListener('keydown', (e) => {
+  if (e.target && e.target.dataset && e.target.dataset.bloqueadoPeloBooster === 'true') {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
+
+document.addEventListener('paste', (e) => {
+  if (e.target && e.target.dataset && e.target.dataset.bloqueadoPeloBooster === 'true') {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
+
+document.addEventListener('cut', (e) => {
+  if (e.target && e.target.dataset && e.target.dataset.bloqueadoPeloBooster === 'true') {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
+
 function bloquearCamposHipoteseInfo() {
   const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
   const info = document.querySelector('textarea[controllabel="Informação Complementar"]');
@@ -1743,9 +1771,12 @@ function bloquearCamposHipoteseInfo() {
   [hipotese, info].forEach(campo => {
     if (campo) {
       campo.disabled = true;
+      campo.readOnly = true;
+      campo.tabIndex = -1;
       campo.style.pointerEvents = 'none';
       campo.style.opacity = '0.5';
       campo.style.backgroundColor = '#f0f0f0';
+      campo.dataset.bloqueadoPeloBooster = 'true';
     }
   });
 
@@ -1759,9 +1790,12 @@ function desbloquearCamposHipoteseInfo() {
   [hipotese, info].forEach(campo => {
     if (campo) {
       campo.disabled = false;
+      campo.readOnly = false;
+      campo.tabIndex = 0;
       campo.style.pointerEvents = '';
       campo.style.opacity = '';
       campo.style.backgroundColor = '';
+      campo.dataset.bloqueadoPeloBooster = 'false';
     }
   });
 
@@ -1795,12 +1829,11 @@ function atualizarTextareaCid(textarea, descricaoAnterior, descricaoNova) {
 
 function aplicarDescricaoCidNosCampos(descricaoAnterior, descricaoNova) {
   const hipotese = document.querySelector('textarea[controllabel="Hipótese Diagnóstica"]');
-  const info = document.querySelector('textarea[controllabel="Informação Complementar"]');
 
-  // Atualiza hipótese
+  // Atualiza apenas a hipótese. 
+  // O espelhamento (inicializarEspelhamentoCampos) vai copiar tudo automaticamente
+  // para a informação complementar ao disparar o evento 'input'
   atualizarTextareaCid(hipotese, descricaoAnterior, descricaoNova);
-  // Atualiza informação diretamente (sem depender do espelhamento para evitar duplicações)
-  atualizarTextareaCid(info, descricaoAnterior, descricaoNova);
 }
 
 function obterDescricaoCidPrincipal() {
