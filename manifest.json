@@ -18,7 +18,18 @@
         "medicos-database.js",
         "regras.js",
         "autocomplete.js",
-        "content.js"
+        "content-globals.js",
+        "content-busca-cns-cpf.js",
+        "content-remocao-carregamento.js",
+        "content-monitor.js",
+        "content-validacao-duplicidade.js",
+        "content-prediagnosticos.js",
+        "content-listeners.js",
+        "content-customizacao.js",
+        "content-destaque.js",
+        "content-bloqueio-cid.js",
+        "content-observer.js",
+        "content-init.js"
       ],
       "css": [
         "styles.css"
@@ -47,8 +58,13 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["interceptor.js", "assets/*"],
-      "matches": ["https://regulador.saude.pe.gov.br/*"]
+      "resources": [
+        "interceptor.js",
+        "assets/*"
+      ],
+      "matches": [
+        "https://regulador.saude.pe.gov.br/*"
+      ]
     }
   ]
 }
