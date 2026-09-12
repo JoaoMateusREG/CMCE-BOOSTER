@@ -51,7 +51,7 @@ function executarBuscaEValidacao(itemAlvo) {
 }
 
 function validarDuplicidade(itemAlvo, rows) {
-  const statusCriticos = ['AGUARDANDO REGULAÇÃO', 'AUTORIZADO', 'OPINIÃO FORMATIVA', 'MARCADO'];
+  const statusCriticos = ['AGUARDANDO REGULAÇÃO', 'AUTORIZADO', 'OPINIÃO FORMATIVA', 'MARCADO', 'PENDENTE'];
   let duplicado = null;
 
   rows.forEach(row => {
